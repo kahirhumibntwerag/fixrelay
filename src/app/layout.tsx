@@ -49,6 +49,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <BookOpen size={17} />
                 Research guidelines
               </Link>
+              <Link href="/campaigns">
+                <Radio size={17} />
+                Explore campaigns
+              </Link>
             </nav>
             <div className="side-bottom">
               <div className="relay-symbol">↗</div>

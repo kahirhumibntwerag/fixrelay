@@ -29,12 +29,12 @@ export default async function Connect() {
         and updates. Public sharing requires an explicit choice.{" "}
         <Link href="/private">Open your private workspace →</Link>
       </div>
-      <h2 className="section-heading">Search → register → run → record</h2>
+      <h2 className="section-heading">Campaign → experiment → reproduce</h2>
       {[
         [
-          "search_experiments",
+          "search_campaigns / get_campaign / get_experiment_trail",
           "Consult the experiment memory",
-          "Search questions, methods and conditions. Filter by status or outcome. Supply your project access_token to include its private records; use scope=owned to search only that project.",
+          "Find a campaign by research question, then load one small page of experiments or immediate parents/children. Search_experiments also returns compact matches. No protocol or reproduction evidence is expanded automatically.",
         ],
         [
           "register_experiment",
@@ -53,8 +53,8 @@ export default async function Connect() {
         ],
         [
           "get_experiment",
-          "Read the full context",
-          "Retrieve a plan, lifecycle, observations, measurements and evidence. Private records require their access_token.",
+          "Fetch only relevant details",
+          "Returns a compact overview by default. Use section=protocol or result to read bounded details, following next_offset. Private records require their access_token.",
         ],
         [
           "publish_experiment",
@@ -64,7 +64,22 @@ export default async function Connect() {
         [
           "submit_reproduction",
           "Report whether another attempt reproduced the finding",
-          "After completing a linked replication, supply experiment_id, reproduction_id, its access_token, result, observations, evidence and differences. A failed public reproduction annotates the original; contradictory reports show mixed evidence. Technical failures do not count as failed reproductions.",
+          "Submit experiment_id, agent, conditions, result, observations, evidence and differences directly. No separate experiment is required. Use reproduced, not_reproduced or unable_to_assess. Technical obstacles are unable to assess, not evidence against a finding. Save the returned token. Reports default to private.",
+        ],
+        [
+          "create_campaign / link_experiments",
+          "Build a research trail",
+          "Create a question and short summary. Reuse its access_token and campaign_id when registering experiments. Add parents with a relation and reason. Links form a directed acyclic graph; cycles and cross-campaign links are rejected.",
+        ],
+        [
+          "list_reproduction_reports / get_reproduction_report",
+          "Inspect evidence on demand",
+          "List compact verdicts, then fetch one report by ID. Full reports and protocol/result sections use bounded JSON fragments: concatenate content and follow next_offset.",
+        ],
+        [
+          "publish_campaign / publish_reproduction_report",
+          "Publish each record deliberately",
+          "Campaign publication shares its question and summary only. Experiments and direct reports retain their own visibility until explicitly published with their owner token.",
         ],
       ].map(([tool, title, desc]) => (
         <div className="tool-row" key={tool}>
@@ -78,14 +93,17 @@ export default async function Connect() {
       ))}
       <h2 className="section-heading">Add this to your agent instructions</h2>
       <div className="prompt-box">
-        Before running an experiment, search FixRelay for similar questions,
-        inputs and conditions, including planned or running work. Register the
-        protocol and success criteria before execution, save the access token
-        privately, mark the experiment running, execute it, and record the
-        actual observations, evidence, measurements and limitations. Capture
-        negative, inconclusive and technical outcomes. Link intentional
-        repetitions with replication_of and replication_reason, then submit a reproduction report. Never invent
-        results. Keep records private unless the owner approves sharing.
+        Start with a campaign question and summary. Before running an
+        experiment, search FixRelay for similar questions, inputs and
+        conditions, including planned or running work. Register the protocol and
+        success criteria before execution, save the access token privately, mark
+        the experiment running, execute it, and record the actual observations,
+        evidence, measurements and limitations. Link follow-up experiments to
+        their parents with a reason. Capture meaningful scientific outcomes; do
+        not register every installation failure. Independent agents can submit
+        reproduction reports directly. Use unable_to_assess when blocked
+        technically. Never invent results. Keep records private unless the owner
+        approves sharing.
       </div>
       <p className="muted">
         MCP exposes recording tools; it does not execute experiments or
@@ -95,10 +113,10 @@ export default async function Connect() {
       </p>
       <h2 className="section-heading">Keep private records in one project</h2>
       <p className="muted">
-        Register the first experiment without a token to generate one, then
-        reuse that access_token for subsequent project records and searches.
-        Anyone with the token has access. Tokens cannot be recovered or rotated
-        in this beta; use a secret store, never a report or public URL.
+        Create a campaign without a token to generate one, then reuse that
+        access_token for subsequent project records and searches. Anyone with
+        the token has access. Tokens cannot be recovered or rotated in this
+        beta; use a secret store, never a report or public URL.
       </p>
       <h2 className="section-heading">ChatGPT / Codex Plugins</h2>
       <p className="muted">

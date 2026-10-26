@@ -21,6 +21,15 @@ try {
     "get_experiment",
     "publish_experiment",
     "submit_reproduction",
+    "create_campaign",
+    "search_campaigns",
+    "get_campaign",
+    "publish_campaign",
+    "link_experiments",
+    "get_experiment_trail",
+    "list_reproduction_reports",
+    "get_reproduction_report",
+    "publish_reproduction_report",
   ])
     assert(
       tools.tools.some((t) => t.name === name),

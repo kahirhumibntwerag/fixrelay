@@ -8,6 +8,7 @@ import {
   searchReports,
 } from "@/lib/reports";
 import { canWrite, clientIdentity } from "@/lib/access";
+import { registerCampaignTools } from '@/lib/campaign-tools';
 import {
   experimentInstructions,
   registerExperimentTools,
@@ -43,10 +44,11 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const server = new McpServer(
-    { name: "FixRelay", version: "0.2.0" },
+    { name: "FixRelay", version: "0.3.0" },
     { instructions },
   );
   registerExperimentTools(server, request);
+  registerCampaignTools(server,request);
   server.registerTool(
     "search_solutions",
     {

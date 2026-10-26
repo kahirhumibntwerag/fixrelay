@@ -45,6 +45,19 @@ export const registerSchema = z.object({
   access_token: accessTokenSchema.optional(),
   replication_of: z.string().uuid().optional(),
   replication_reason: text(20, 4000).optional(),
+  campaign_id: z.string().uuid().optional(),
+  parents: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        relation: z
+          .enum(["follow_up", "refinement", "replication", "dependency"])
+          .default("follow_up"),
+        reason: text(10, 500),
+      }),
+    )
+    .max(5)
+    .default([]),
 });
 export const outcomeSchema = z.object({
   id: z.string().uuid(),
@@ -76,13 +89,17 @@ export const outcomeSchema = z.object({
 });
 export const reproductionSchema = z.object({
   experiment_id: z.string().uuid(),
-  reproduction_id: z.string().uuid(),
-  access_token: accessTokenSchema,
+  reproduction_id: z.string().uuid().optional(),
+  access_token: accessTokenSchema.optional(),
+  agent: text(2, 80).optional(),
+  conditions: text(5, 4000).optional(),
+  visibility: z.enum(["private", "public"]).default("private"),
   result: z.enum([
     "reproduced",
     "not_reproduced",
     "inconclusive",
     "technical_failure",
+    "unable_to_assess",
   ]),
   observations: text(20, 16000),
   evidence: text(20, 16000),
@@ -91,12 +108,14 @@ export const reproductionSchema = z.object({
 export type ReproductionReport = {
   id: string;
   experiment_id: string;
-  reproduction_id: string;
+  reproduction_id: string | null;
   result:
     | "reproduced"
     | "not_reproduced"
     | "inconclusive"
-    | "technical_failure";
+    | "technical_failure"
+    | "unable_to_assess";
+  conditions: string;
   observations: string;
   evidence: string;
   differences: string;
@@ -112,7 +131,7 @@ export const searchSchema = z.object({
   outcome: z.enum(outcomes).optional(),
   access_token: accessTokenSchema.optional(),
   scope: z.enum(["accessible", "owned"]).default("accessible"),
-  limit: z.number().int().min(1).max(50).default(10),
+  limit: z.number().int().min(1).max(50).default(5),
   offset: z.number().int().min(0).max(10000).default(0),
 });
 export type Experiment = {
@@ -143,6 +162,9 @@ export type Experiment = {
   not_reproduced_count: number;
   inconclusive_count: number;
   technical_failure_count: number;
+  unable_to_assess_count: number;
+  campaign_id: string | null;
+  campaign_title: string | null;
   reproduction_status:
     | "unreviewed"
     | "reproduced"
@@ -152,27 +174,31 @@ export type Experiment = {
   reproductions?: ReproductionReport[];
 };
 export class ExperimentError extends Error {}
-const hash = (value: string) =>
+export const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
-const ownerHash = (token?: string) => (token ? hash(token) : "");
+export const ownerHash = (token?: string) => (token ? hash(token) : "");
 function clean(row: Record<string, unknown>): Experiment {
   const {
     owner_hash: _,
     fingerprint: __,
     outcome_hash: ___,
     search_vector: ____,
+    accessible_campaign_id,
     ...record
   } = row;
   const yes = Number(row.reproduced_count || 0),
     no = Number(row.not_reproduced_count || 0),
     uncertain = Number(row.inconclusive_count || 0),
-    technical = Number(row.technical_failure_count || 0);
+    technical = Number(row.technical_failure_count || 0),
+    unable = Number(row.unable_to_assess_count || 0);
   return {
     ...record,
     reproduced_count: yes,
     not_reproduced_count: no,
     inconclusive_count: uncertain,
     technical_failure_count: technical,
+    unable_to_assess_count: unable,
+    campaign_id: (accessible_campaign_id as string) || null,
     reproduction_status:
       yes && no
         ? "mixed"
@@ -180,7 +206,7 @@ function clean(row: Record<string, unknown>): Experiment {
           ? "not_reproduced"
           : yes
             ? "reproduced"
-            : uncertain || technical
+            : uncertain || technical || unable
               ? "inconclusive"
               : "unreviewed",
   } as Experiment;
@@ -191,7 +217,10 @@ export async function searchExperiments(
   const p = searchSchema.parse(input),
     sql = db();
   const rows =
-    await sql`SELECT e.*,s.reproduced_count,s.not_reproduced_count,s.inconclusive_count,s.technical_failure_count FROM experiments e LEFT JOIN public_reproduction_summary s ON s.experiment_id=e.id WHERE ((visibility='public' AND ${p.scope}<>'owned') OR owner_hash=${ownerHash(p.access_token)})
+    await sql`SELECT e.*,s.reproduced_count,s.not_reproduced_count,s.inconclusive_count,s.technical_failure_count,s.unable_to_assess_count,
+ (SELECT c.id FROM campaigns c WHERE c.id=e.campaign_id AND (c.visibility='public' OR c.owner_hash=${ownerHash(p.access_token)})) AS accessible_campaign_id,
+ (SELECT c.title FROM campaigns c WHERE c.id=e.campaign_id AND (c.visibility='public' OR c.owner_hash=${ownerHash(p.access_token)})) AS campaign_title
+ FROM experiments e LEFT JOIN public_reproduction_summary s ON s.experiment_id=e.id WHERE ((visibility='public' AND ${p.scope}<>'owned') OR owner_hash=${ownerHash(p.access_token)})
  AND (${p.query}='' OR search_vector @@ websearch_to_tsquery('english',${p.query}) OR title ILIKE ${"%" + p.query + "%"} OR question ILIKE ${"%" + p.query + "%"} OR ${p.query.toLowerCase()}=ANY(tags))
  AND (${p.tag}='' OR ${p.tag}=ANY(tags)) AND (${p.status || ""}='' OR status=${p.status || ""}) AND (${p.outcome || ""}='' OR outcome=${p.outcome || ""})
  ORDER BY CASE WHEN ${p.query}='' THEN 0 ELSE ts_rank(search_vector,websearch_to_tsquery('english',${p.query})) END DESC,created_at DESC LIMIT ${p.limit} OFFSET ${p.offset}`;
@@ -200,11 +229,13 @@ export async function searchExperiments(
 export async function getExperiment(id: string, token?: string) {
   if (!z.string().uuid().safeParse(id).success) return null;
   const sql = db();
-  const rows =
-    await sql`SELECT * FROM experiments WHERE id=${id} AND (visibility='public' OR owner_hash=${ownerHash(token)})`;
+  const rows = await sql`SELECT e.*,
+ (SELECT c.id FROM campaigns c WHERE c.id=e.campaign_id AND (c.visibility='public' OR c.owner_hash=${ownerHash(token)})) AS accessible_campaign_id,
+ (SELECT c.title FROM campaigns c WHERE c.id=e.campaign_id AND (c.visibility='public' OR c.owner_hash=${ownerHash(token)})) AS campaign_title
+ FROM experiments e WHERE id=${id} AND (visibility='public' OR owner_hash=${ownerHash(token)})`;
   if (!rows[0]) return null;
   const reports =
-    await sql`SELECT r.id,r.experiment_id,r.reproduction_id,r.result,r.observations,r.evidence,r.differences,r.created_at,e.title AS reproduction_title,e.agent,e.visibility FROM reproduction_reports r JOIN experiments e ON e.id=r.reproduction_id WHERE r.experiment_id=${id} AND (e.visibility='public' OR e.owner_hash=${ownerHash(token)}) ORDER BY r.created_at DESC`;
+    await sql`SELECT r.id,r.experiment_id,r.reproduction_id,r.result,r.observations,r.evidence,r.differences,r.created_at,e.title AS reproduction_title,coalesce(e.agent,r.agent) AS agent,coalesce(e.conditions,r.conditions) AS conditions,coalesce(e.visibility,r.visibility) AS visibility FROM reproduction_reports r LEFT JOIN experiments e ON e.id=r.reproduction_id WHERE r.experiment_id=${id} AND (coalesce(e.visibility,r.visibility)='public' OR coalesce(e.owner_hash,r.owner_hash)=${ownerHash(token)}) ORDER BY r.created_at DESC`;
   return {
     ...clean({
       ...rows[0],
@@ -216,11 +247,14 @@ export async function getExperiment(id: string, token?: string) {
       technical_failure_count: reports.filter(
         (r) => r.result === "technical_failure",
       ).length,
+      unable_to_assess_count: reports.filter(
+        (r) => r.result === "unable_to_assess",
+      ).length,
     }),
     reproductions: reports as ReproductionReport[],
   };
 }
-async function quota(identity: string) {
+export async function quota(identity: string) {
   const key = hash(
     (process.env.RATE_LIMIT_SALT || "fixrelay") + "experiment:" + identity,
   );
@@ -242,6 +276,16 @@ export async function registerExperiment(
     );
   const token = p.access_token || randomBytes(32).toString("base64url"),
     owner = ownerHash(token);
+  if (p.parents.length && !p.campaign_id)
+    throw new ExperimentError("Parent links require a campaign_id.");
+  if (p.campaign_id) {
+    const campaign =
+      await db()`SELECT id FROM campaigns WHERE id=${p.campaign_id} AND owner_hash=${owner}`;
+    if (!campaign[0])
+      throw new ExperimentError(
+        "Campaign inaccessible. Supply its project access_token.",
+      );
+  }
   if (p.replication_of) {
     const source = await getExperiment(p.replication_of, token);
     if (!source)
@@ -265,6 +309,7 @@ export async function registerExperiment(
         p.success_criteria,
         p.replication_of || "",
         p.replication_reason || "",
+        ...(p.campaign_id ? [p.campaign_id, JSON.stringify(p.parents)] : []),
       ].map((s) => s.replace(/\s+/g, " ").trim()),
     ),
   );
@@ -279,9 +324,24 @@ export async function registerExperiment(
       access_token: token,
     };
   await quota(identity);
-  const rows =
-    await sql`INSERT INTO experiments(title,question,hypothesis,method,inputs,conditions,success_criteria,tags,agent,visibility,owner_hash,fingerprint,replication_of,replication_reason)
- VALUES (${p.title},${p.question},${p.hypothesis},${p.method},${p.inputs},${p.conditions},${p.success_criteria},${p.tags},${p.agent},${p.visibility},${owner},${fingerprint},${p.replication_of || null},${p.replication_reason || null}) ON CONFLICT(owner_hash,fingerprint) DO NOTHING RETURNING id`;
+  const statements = [
+    sql`INSERT INTO experiments(title,question,hypothesis,method,inputs,conditions,success_criteria,tags,agent,visibility,owner_hash,fingerprint,replication_of,replication_reason,campaign_id)
+ VALUES (${p.title},${p.question},${p.hypothesis},${p.method},${p.inputs},${p.conditions},${p.success_criteria},${p.tags},${p.agent},${p.visibility},${owner},${fingerprint},${p.replication_of || null},${p.replication_reason || null},${p.campaign_id || null}) ON CONFLICT(owner_hash,fingerprint) DO UPDATE SET fingerprint=EXCLUDED.fingerprint RETURNING id`,
+  ];
+  for (const parent of p.parents)
+    statements.push(
+      sql`SELECT link_campaign_experiments(${p.campaign_id}::uuid,${parent.id}::uuid,(SELECT id FROM experiments WHERE owner_hash=${owner} AND fingerprint=${fingerprint}),${owner},${parent.relation},${parent.reason})`,
+    );
+  let rows;
+  try {
+    [rows] = await sql.transaction(statements);
+  } catch (e) {
+    if (e instanceof Error && /campaign|Both experiments|cycle/.test(e.message))
+      throw new ExperimentError(
+        "Invalid campaign parent link; registration was rolled back.",
+      );
+    throw e;
+  }
   const record =
     rows[0] ||
     (
@@ -395,61 +455,5 @@ export async function submitReproduction(
   input: z.input<typeof reproductionSchema>,
   identity: string,
 ) {
-  const p = reproductionSchema.parse(input),
-    sql = db(),
-    owner = ownerHash(p.access_token);
-  const attempts =
-    await sql`SELECT id,replication_of,status FROM experiments WHERE id=${p.reproduction_id} AND owner_hash=${owner}`;
-  if (!attempts[0] || attempts[0].replication_of !== p.experiment_id)
-    throw new ExperimentError(
-      "A reproduction report must reference your own linked replication experiment.",
-    );
-  if (attempts[0].status !== "completed")
-    throw new ExperimentError(
-      "Record the replication outcome before submitting its reproduction report.",
-    );
-  const source = await getExperiment(p.experiment_id, p.access_token);
-  if (!source) throw new ExperimentError("Original experiment inaccessible.");
-  if (source.status !== "completed")
-    throw new ExperimentError(
-      "The original experiment must have a completed outcome before assessing reproduction.",
-    );
-  const digest = hash(
-    JSON.stringify([
-      p.experiment_id,
-      p.reproduction_id,
-      p.result,
-      p.observations,
-      p.evidence,
-      p.differences,
-    ]),
-  );
-  const existing =
-    await sql`SELECT id,report_hash FROM reproduction_reports WHERE reproduction_id=${p.reproduction_id}`;
-  if (existing[0]) {
-    if (existing[0].report_hash === digest)
-      return { id: existing[0].id, duplicate: true };
-    throw new ExperimentError(
-      "This replication already has an immutable reproduction report.",
-    );
-  }
-  await quota(identity);
-  const rows =
-    await sql`INSERT INTO reproduction_reports(experiment_id,reproduction_id,result,observations,evidence,differences,report_hash) VALUES (${p.experiment_id},${p.reproduction_id},${p.result},${p.observations},${p.evidence},${p.differences},${digest}) ON CONFLICT(reproduction_id) DO NOTHING RETURNING id`;
-  if (!rows.length) {
-    const other =
-      await sql`SELECT id,report_hash FROM reproduction_reports WHERE reproduction_id=${p.reproduction_id}`;
-    if (other[0]?.report_hash === digest)
-      return { id: other[0].id, duplicate: true };
-    throw new ExperimentError(
-      "Another reproduction report was recorded concurrently.",
-    );
-  }
-  return {
-    id: rows[0].id,
-    experiment_id: p.experiment_id,
-    result: p.result,
-    duplicate: false,
-    note: "Public annotations include only public replication records. Reporter independence is not verified.",
-  };
+  return (await import("./reproductions")).submit(input, identity);
 }

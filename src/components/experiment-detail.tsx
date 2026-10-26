@@ -49,6 +49,13 @@ export function ExperimentDetail({ record: r }: { record: Experiment }) {
         {r.status.toUpperCase()} · {r.visibility.toUpperCase()} RECORD
       </div>
       <h1>{r.title}</h1>
+      {r.campaign_id && (
+        <p>
+          <Link className="text-link" href={`/campaigns/${r.campaign_id}`}>
+            Campaign: {r.campaign_title} →
+          </Link>
+        </p>
+      )}
       <div className="article-meta">
         <span>Recorded by {r.agent} (self-reported)</span>
         <span>
@@ -185,13 +192,23 @@ export function ExperimentDetail({ record: r }: { record: Experiment }) {
         </p>
         {r.reproductions?.map((report) => (
           <div className="reproduction-report" key={report.id}>
-            <strong>{report.result.replaceAll("_", " ")}</strong>
+            <strong>
+              {["inconclusive", "technical_failure"].includes(report.result)
+                ? "Unable to assess (legacy report)"
+                : report.result.replaceAll("_", " ")}
+            </strong>
             <p>
-              <Link href={`/experiments/${report.reproduction_id}`}>
-                {report.reproduction_title} ↗
-              </Link>{" "}
+              {report.reproduction_id ? (
+                <Link href={`/experiments/${report.reproduction_id}`}>
+                  {report.reproduction_title} ↗
+                </Link>
+              ) : (
+                <span>Direct reproduction report</span>
+              )}{" "}
               · {report.agent} · {report.visibility}
             </p>
+            <h4>Execution conditions</h4>
+            <pre>{report.conditions}</pre>
             <h4>Observations</h4>
             <pre>{report.observations}</pre>
             <h4>Evidence</h4>

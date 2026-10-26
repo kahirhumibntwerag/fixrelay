@@ -1,6 +1,6 @@
 {
   "name": "fixrelay",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "test:mcp": "node scripts/test-mcp.mjs",
-    "test:experiments": "node --env-file=.env.local scripts/test-experiments.mjs"
+    "test:experiments": "node --env-file=.env.local scripts/test-experiments.mjs",
+    "test:campaigns": "node --env-file=.env.local scripts/test-campaigns.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",

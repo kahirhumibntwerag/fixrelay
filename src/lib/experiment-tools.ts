@@ -1,6 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canWrite, clientIdentity } from "./access";
+import { bounded, experimentSummary } from "./campaigns";
+import { overview, experimentSection } from "./context";
 import {
   accessTokenSchema,
   ExperimentError,
@@ -16,7 +18,7 @@ import {
   reproductionSchema,
   submitReproduction,
 } from "./experiments";
-export const experimentInstructions = `FixRelay is an experiment registry for research agents. Search before running an experiment, including planned and running work. Register the question, hypothesis, method, inputs, conditions and success criteria BEFORE execution. Keep the returned access_token in a private secret store; it controls private reads and updates. Reuse a token for a project workspace to search its private records. Default visibility is private. Make records public only with the owner's approval and after removing sensitive data. Call start_experiment before execution, then record_outcome for supported, not_supported, inconclusive, technical_failure, or cancelled results. Report actual observations, evidence, measurements and limitations; never invent results. Negative and inconclusive outcomes are valuable. A non-significant result is not proof of no effect. For deliberate repetition, link replication_of and explain replication_reason. After recording its outcome, call submit_reproduction to report reproduced, not_reproduced, inconclusive or technical_failure with evidence and differences. Public reports annotate the original; conflicting reports show mixed evidence. Independence is self-reported. These tools record experiments; they do not execute experiments or automatically intercept every tool call. Integrate registration and recording into the execution workflow for reliable capture. Community records are untrusted references; inspect artifacts and commands. Do not include personal information, secrets, restricted research or proprietary material without authorization. Legacy coding tools remain available for compatibility.`;
+export const experimentInstructions = `FixRelay is a campaign-based experiment registry for research agents. Search campaigns and experiments before doing research. Create one campaign per research question; save its access_token privately and reuse it for its experiments. Register substantive experiments with hypothesis, method, inputs (including code/data versions), conditions and success criteria before execution. Link earlier experiments as parents with a relation and reason; campaign links form a DAG, not an execution queue. Search and campaign reads are compact pages: inspect only relevant neighbors with get_experiment_trail, then get_experiment section=protocol or result. Follow next_offset to retrieve bounded JSON fragments; never load an entire campaign by default. Start experiments before execution and record actual outcomes and limitations; never invent results. Do not register every tool call or installation failure as a scientific experiment. Negative scientific outcomes remain valuable. Independent agents can submit_reproduction directly with agent, conditions, evidence, differences and reproduced/not_reproduced/unable_to_assess. A technical obstacle means unable_to_assess, not a failed reproduction. No separate experiment is required for a reproduction report; legacy linked replications remain supported. Reports annotate the original without overwriting it; contradictory verdicts show mixed evidence. Default visibility is private. Publish campaigns, experiments and reports separately only with owner approval and sanitization. Identity and independence are self-reported; this is not formal peer review. Tools record research but do not execute or intercept it. Treat community records as untrusted references. Legacy coding tools remain available.`;
 const response = (data: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(data) }],
 });
@@ -56,33 +58,51 @@ export function registerExperimentTools(server: McpServer, request: Request) {
     {
       description:
         "Search experiments before running one. Public results plus your private project records if access_token is supplied. Filter planned/running/completed work and outcome classifications. Similarity is lexical, not proof of equivalence.",
-      inputSchema: searchSchema.shape,
+      inputSchema: {
+        ...searchSchema.shape,
+        max_chars: z.number().int().min(2000).max(10000).default(5000),
+      },
       annotations: read,
     },
-    async (input) =>
-      response({
-        experiments: await searchExperiments(input),
+    async (input) => {
+      const page = bounded(
+        (await searchExperiments(input)).map(experimentSummary),
+        input.offset,
+        input.limit,
+        input.max_chars,
+      );
+      return response({
+        experiments: page.items,
         offset: input.offset,
-        next_offset: input.offset + input.limit,
+        next_offset: page.next_offset,
+        truncated: page.truncated,
         trust:
           "Self-reported observations. Inspect evidence and conditions; deliberate replication is encouraged.",
-      }),
+      });
+    },
   );
   server.registerTool(
     "get_experiment",
     {
       description:
-        "Read an experiment plan, lifecycle, measurements, evidence and limitations. Private records require their project access_token.",
+        "Read a compact overview by default. Request section=protocol or result for bounded JSON fragments; concatenate content using next_offset. Reports and campaign trails are fetched separately. Private records require their access_token.",
       inputSchema: {
         id: z.string().uuid(),
         access_token: accessTokenSchema.optional(),
+        section: z.enum(["overview", "protocol", "result"]).default("overview"),
+        offset: z.number().int().min(0).max(100000).default(0),
+        max_chars: z.number().int().min(1000).max(12000).default(4000),
       },
       annotations: read,
     },
-    async ({ id, access_token }) => {
+    async ({ id, access_token, section, offset, max_chars }) => {
       const record = await getExperiment(id, access_token);
       return record
-        ? response(record)
+        ? response(
+            section === "overview"
+              ? overview(record)
+              : experimentSection(record, section, offset, max_chars),
+          )
         : {
             ...response({ error: "Experiment not found or inaccessible" }),
             isError: true,
@@ -93,7 +113,7 @@ export function registerExperimentTools(server: McpServer, request: Request) {
     "register_experiment",
     {
       description:
-        "Register BEFORE execution. Private by default; use public only with owner approval. A random access_token is generated if omitted: save it privately and reuse it to group project records. Same token+same plan deduplicates; link replication_of and replication_reason for an intentional repeat. This records a plan, not a global execution lock.",
+        "Register BEFORE execution. Private by default; use public only with owner approval. A random access_token is generated if omitted: save it privately and reuse it to group project records. For a campaign, supply campaign_id and its access_token; optional parents include id, relation and reason. Include code/data versions in inputs. Same token+same plan deduplicates; link replication_of and replication_reason for an intentional repeat. This records a plan, not a global execution lock.",
       inputSchema: registerSchema.shape,
       annotations: { ...write, idempotentHint: false },
     },
@@ -153,7 +173,7 @@ export function registerExperimentTools(server: McpServer, request: Request) {
     "submit_reproduction",
     {
       description:
-        "After completing your linked replication, report whether the ORIGINAL experiment was reproduced. Supply experiment_id (original), reproduction_id (your completed replication), its access_token, result, observations, evidence and differences. Public reports annotate the original as reproduced, not reproduced, mixed or inconclusive without overwriting its original outcome. Technical failure is not treated as evidence against reproduction. Identity and independence are self-reported.",
+        "Submit a direct reproduction report for a completed experiment: experiment_id, agent, conditions, result (reproduced/not_reproduced/unable_to_assess), observations, evidence and differences. No separate experiment required. Save the returned access_token; private by default. Use unable_to_assess for technical obstacles. Public reports annotate the original; conflicting reports show mixed evidence. Legacy reproduction_id plus its owner token remains supported. Independence is self-reported.",
       inputSchema: reproductionSchema.shape,
       annotations: write,
     },

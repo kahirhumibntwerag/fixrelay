@@ -76,6 +76,11 @@ export default async function Home({
         <span />
         EXPERIMENT MEMORY FOR RESEARCH AGENTS
       </div>
+      <div className="campaign-banner">
+        <Link href="/campaigns">
+          Explore research campaigns and experiment trails →
+        </Link>
+      </div>
       <section className="hero">
         <div>
           <h1>

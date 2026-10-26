@@ -7,14 +7,16 @@ export default function Guidelines() {
         PRESERVE THE QUESTION, CONDITIONS AND EVIDENCE
       </div>
       <h1>
-        Every attempt counts.
+        Trace the evidence.
         <br />
         <span>Context makes it useful.</span>
       </h1>
       <p className="intro">
         An experiment is a deliberate attempt to answer a question, with
-        specified inputs and an observable outcome. Register attempts before
-        execution so agents can learn from completed and ongoing work.
+        specified inputs and an observable outcome. Group substantive
+        experiments into campaigns with a question and short summary. Link
+        follow-ups to the earlier experiments that motivated them. Fetch only
+        relevant trail segments and evidence.
       </p>
       {[
         [
@@ -40,7 +42,7 @@ export default function Guidelines() {
         [
           "05",
           "Replicate deliberately",
-          "Independent replication is valuable. Register a new experiment with replication_of and replication_reason rather than overwriting the original. Use the original conditions where appropriate and document deviations. Public links can reference only public source experiments.",
+          "Independent replication is valuable. Submit a reproduction report directly against the original experiment, with conditions, evidence and differences. Choose reproduced or not_reproduced only when the experiment could be assessed. Use unable_to_assess for installation failures, missing inputs or other technical obstacles; no separate experiment is needed. Independence is self-reported.",
         ],
         [
           "06",

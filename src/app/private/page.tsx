@@ -1,39 +1,77 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
-import type { Experiment } from "@/lib/experiments";
 import { ExperimentDetail } from "@/components/experiment-detail";
+import {
+  CampaignView,
+  type CampaignViewData,
+} from "@/components/campaign-view";
+import type { Experiment } from "@/lib/experiments";
+type Row = {
+  id: string;
+  title: string;
+  question: string;
+  visibility: string;
+  status?: string;
+};
 export default function PrivateWorkspace() {
   const [token, setToken] = useState(""),
     [query, setQuery] = useState(""),
-    [records, setRecords] = useState<Experiment[]>([]),
+    [kind, setKind] = useState<"experiments" | "campaigns">("campaigns"),
+    [records, setRecords] = useState<Row[]>([]),
     [selected, setSelected] = useState<Experiment | null>(null),
+    [campaign, setCampaign] = useState<CampaignViewData | null>(null),
     [offset, setOffset] = useState(0),
     [loaded, setLoaded] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  async function load(next = 0) {
+  const generation = useRef(0);
+  function clear() {
+    generation.current++;
+    setRecords([]);
+    setSelected(null);
+    setCampaign(null);
+    setLoaded(false);
+    setError("");
+    setBusy(false);
+  }
+  async function read(next = 0, id?: string, requestedKind = kind) {
+    const ticket = ++generation.current;
     setBusy(true);
     setError("");
-    setSelected(null);
     try {
       const res = await fetch("/api/experiments/private", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_token: token, query, offset: next }),
+        body: JSON.stringify({
+          access_token: token,
+          query,
+          offset: next,
+          id,
+          kind: requestedKind,
+        }),
         cache: "no-store",
       });
       const data = await res.json();
+      if (ticket !== generation.current) return;
       if (!res.ok) throw new Error(data.error);
-      setRecords(data.experiments);
-      setOffset(next);
-      setLoaded(true);
+      if (id) {
+        if (requestedKind === "campaigns") {
+          setCampaign(data.campaign);
+          setSelected(null);
+        } else setSelected(data.experiment);
+      } else {
+        setRecords(data.campaigns || data.experiments);
+        setSelected(null);
+        setCampaign(null);
+        setOffset(next);
+        setLoaded(true);
+      }
     } catch (e) {
-      setRecords([]);
-      setLoaded(false);
-      setError(e instanceof Error ? e.message : "Unable to load experiments");
+      if (ticket === generation.current)
+        setError(e instanceof Error ? e.message : "Unable to load records");
     } finally {
-      setBusy(false);
+      if (ticket === generation.current) setBusy(false);
     }
   }
   return (
@@ -43,20 +81,20 @@ export default function PrivateWorkspace() {
         PRIVATE PROJECT WORKSPACE
       </div>
       <h1>
-        Your experiments.
+        Your campaigns.
         <br />
         <span>Your access token.</span>
       </h1>
       <p className="intro">
-        Use the token returned by register_experiment to read your project
-        records. Tokens stay in this page’s memory and are sent in the request
-        body, never in the URL. Reloading clears them.
+        Use the token from create_campaign or register_experiment. It stays in
+        page memory and is sent in POST bodies, never the URL. Reloading clears
+        it.
       </p>
       <form
         className="private-form"
         onSubmit={(e) => {
           e.preventDefault();
-          void load();
+          void read();
         }}
       >
         <label>
@@ -66,15 +104,26 @@ export default function PrivateWorkspace() {
             value={token}
             onChange={(e) => {
               setToken(e.target.value);
-              setRecords([]);
-              setSelected(null);
-              setLoaded(false);
+              clear();
             }}
             autoComplete="off"
-            required
             minLength={32}
             maxLength={128}
+            required
           />
+        </label>
+        <label>
+          Record type
+          <select
+            value={kind}
+            onChange={(e) => {
+              setKind(e.target.value as typeof kind);
+              clear();
+            }}
+          >
+            <option value="campaigns">Campaigns</option>
+            <option value="experiments">Experiments</option>
+          </select>
         </label>
         <label>
           Search within your project
@@ -82,22 +131,18 @@ export default function PrivateWorkspace() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             maxLength={500}
-            placeholder="Question, method, materials…"
           />
         </label>
         <div className="hero-actions">
-          <button className="button primary" disabled={busy} type="submit">
+          <button type="submit" className="button primary" disabled={busy}>
             {busy ? "Loading…" : "Open workspace"}
           </button>
           <button
-            className="button secondary"
             type="button"
+            className="button secondary"
             onClick={() => {
               setToken("");
-              setRecords([]);
-              setSelected(null);
-              setLoaded(false);
-              setError("");
+              clear();
             }}
           >
             Clear token and records
@@ -105,12 +150,11 @@ export default function PrivateWorkspace() {
         </div>
       </form>
       <p className="muted small">
-        The token is a bearer capability, not an account login. Anyone with it
-        can read and update its records. Keep it private; lost tokens cannot be
-        recovered.
+        Anyone with this token controls its project records. Keep it private;
+        lost tokens cannot be recovered.
       </p>
       {error && (
-        <p role="alert" className="trust-note">
+        <p className="trust-note" role="alert">
           {error}
         </p>
       )}
@@ -120,42 +164,34 @@ export default function PrivateWorkspace() {
             className="text-link plain-button"
             onClick={() => setSelected(null)}
           >
-            ← Workspace results
+            ← {campaign ? "Campaign trail" : "Workspace results"}
           </button>
           <ExperimentDetail record={selected} />
+        </>
+      ) : campaign ? (
+        <>
+          <button
+            className="text-link plain-button"
+            onClick={() => setCampaign(null)}
+          >
+            ← Workspace results
+          </button>
+          <CampaignView
+            data={campaign}
+            onExperiment={(id) => void read(0, id, "experiments")}
+            onPage={(n) => void read(n, campaign.campaign.id, "campaigns")}
+          />
         </>
       ) : (
         <>
           {records.map((r) => (
             <button
-              key={r.id}
               className="report-card workspace-result"
-              onClick={async () => {
-                setBusy(true);
-                setError("");
-                try {
-                  const res = await fetch("/api/experiments/private", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ access_token: token, id: r.id }),
-                    cache: "no-store",
-                  });
-                  const data = await res.json();
-                  if (!res.ok) throw new Error(data.error);
-                  setSelected(data.experiment);
-                } catch (e) {
-                  setError(
-                    e instanceof Error
-                      ? e.message
-                      : "Unable to load experiment",
-                  );
-                } finally {
-                  setBusy(false);
-                }
-              }}
+              key={r.id}
+              onClick={() => void read(0, r.id)}
             >
               <span className="solved">
-                {r.status} · {r.visibility}
+                {r.status || "campaign"} · {r.visibility}
               </span>
               <h3>{r.title} ↗</h3>
               <p>{r.question}</p>
@@ -163,27 +199,26 @@ export default function PrivateWorkspace() {
           ))}
           {loaded && !records.length && (
             <div className="empty">
-              No matching records for this token. Check the token or search
-              terms.
+              No matching records. Check your token or search terms.
             </div>
           )}
           {loaded && (
             <div className="pagination">
               {offset > 0 && (
-                <button onClick={() => void load(Math.max(0, offset - 20))}>
+                <button onClick={() => void read(Math.max(0, offset - 20))}>
                   ← Previous
                 </button>
               )}
               {records.length === 20 && (
-                <button onClick={() => void load(offset + 20)}>Next →</button>
+                <button onClick={() => void read(offset + 20)}>Next →</button>
               )}
             </div>
           )}
         </>
       )}
       <p className="muted">
-        <Link href="/connect">Connect your agent</Link> to register experiments
-        and record outcomes.
+        <Link href="/connect">Connect your agent</Link> to create campaigns and
+        submit reproduction reports.
       </p>
     </div>
   );
