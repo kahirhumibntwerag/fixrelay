@@ -1,3 +1,4 @@
+import { campaignEvidence } from "./reproduction-status";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { db } from "./reports";
@@ -119,6 +120,15 @@ export async function createCampaign(
     visibility: p.visibility,
   };
 }
+async function campaignSteps(ids: string[], token?: string) {
+  if (!ids.length) return [];
+  return await db()`SELECT e.id,e.campaign_id,e.title,e.status,e.outcome,e.created_at,
+ count(r.id) FILTER(WHERE r.result='reproduced')::int AS reproduced_count,
+ count(r.id) FILTER(WHERE r.result='not_reproduced')::int AS not_reproduced_count,
+ count(r.id) FILTER(WHERE r.result IN ('unable_to_assess','inconclusive','technical_failure'))::int AS unable_to_assess_count
+ FROM experiments e LEFT JOIN reproduction_reports r ON r.experiment_id=e.id AND (coalesce((SELECT re.visibility FROM experiments re WHERE re.id=r.reproduction_id),r.visibility)='public' OR coalesce((SELECT re.owner_hash FROM experiments re WHERE re.id=r.reproduction_id),r.owner_hash)=${ownerHash(token)})
+ WHERE e.campaign_id=ANY(${ids}::uuid[]) AND(e.visibility='public' OR e.owner_hash=${ownerHash(token)}) GROUP BY e.id`;
+}
 export async function searchCampaigns(
   query = "",
   token?: string,
@@ -128,12 +138,24 @@ export async function searchCampaigns(
 ) {
   const rows =
     await db()`SELECT c.id,c.title,c.question,c.summary,c.visibility,c.created_at,(SELECT count(*)::int FROM experiments e WHERE e.campaign_id=c.id AND(e.visibility='public' OR e.owner_hash=${ownerHash(token)})) AS experiments FROM campaigns c WHERE((c.visibility='public' AND NOT ${owned}) OR c.owner_hash=${ownerHash(token)}) AND(${query}='' OR c.title ILIKE ${"%" + query + "%"} OR c.question ILIKE ${"%" + query + "%"}) ORDER BY c.created_at DESC,c.id LIMIT ${limit} OFFSET ${offset}`;
+  const steps = await campaignSteps(
+    rows.map((c) => c.id as string),
+    token,
+  );
   return rows.map((c) => ({
     id: c.id as string,
     title: c.title as string,
     visibility: c.visibility as string,
     created_at: c.created_at as string,
     experiments: Number(c.experiments),
+    reproduction: {
+      ...campaignEvidence(
+        steps.filter((e) => e.campaign_id === c.id) as unknown as Parameters<
+          typeof campaignEvidence
+        >[0],
+      ),
+      scope: token ? ("accessible" as const) : ("public" as const),
+    },
     question: clip(c.question as string, 200),
     summary: clip(c.summary as string, 240),
   }));
@@ -149,8 +171,17 @@ export async function getCampaign(
   const rows =
     await sql`SELECT id,title,question,summary,visibility,created_at FROM campaigns WHERE id=${id} AND(visibility='public' OR owner_hash=${ownerHash(token)})`;
   if (!rows[0]) return null;
-  const experiments =
-    await sql`SELECT e.id,e.title,e.status,e.outcome,e.created_at,s.reproduced_count,s.not_reproduced_count,s.unable_to_assess_count,s.inconclusive_count,s.technical_failure_count FROM experiments e LEFT JOIN public_reproduction_summary s ON s.experiment_id=e.id WHERE e.campaign_id=${id} AND(e.visibility='public' OR e.owner_hash=${ownerHash(token)}) ORDER BY e.created_at,e.id LIMIT ${limit} OFFSET ${offset}`;
+  const steps = await campaignSteps([id], token);
+  const reproduction = campaignEvidence(
+    steps as unknown as Parameters<typeof campaignEvidence>[0],
+  );
+  const experiments = steps
+    .sort(
+      (a, b) =>
+        String(a.created_at).localeCompare(String(b.created_at)) ||
+        String(a.id).localeCompare(String(b.id)),
+    )
+    .slice(offset, offset + limit);
   const nodes = await Promise.all(
     experiments.map(async (e) => {
       const parents =
@@ -163,7 +194,18 @@ export async function getCampaign(
     }),
   );
   return {
-    campaign: rows[0],
+    campaign: {
+      id: rows[0].id as string,
+      title: rows[0].title as string,
+      question: rows[0].question as string,
+      summary: rows[0].summary as string,
+      visibility: rows[0].visibility as string,
+      created_at: rows[0].created_at as string,
+      reproduction: {
+        ...reproduction,
+        scope: token ? ("accessible" as const) : ("public" as const),
+      },
+    },
     experiments: nodes,
     offset,
     next_offset:

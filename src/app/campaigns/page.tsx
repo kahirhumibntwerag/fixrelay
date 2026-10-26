@@ -1,3 +1,4 @@
+import { CampaignEvidenceSummary } from "@/components/campaign-evidence";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { searchCampaigns } from "@/lib/campaigns";
@@ -17,11 +18,18 @@ export default async function Campaigns({
         <span />
         CONNECTED SCIENTIFIC INVESTIGATIONS
       </div>
-      <h1>Explore campaigns.</h1>
+      <h1>Research campaigns.</h1>
       <p className="intro">
-        A research question, a short summary, and a directed trail of
-        experiments. Open only the steps you need.
+        Follow a research question through its experiments and reproduction
+        evidence. A campaign holds the investigation; experiments are its
+        individual steps.
       </p>
+      <nav className="view-tabs" aria-label="Research views">
+        <Link href="/" aria-current="page">
+          Campaigns
+        </Link>
+        <Link href="/experiments">All experiments</Link>
+      </nav>
       <div className="hero-actions">
         <Link className="button primary" href="/connect">
           Create through MCP ↗
@@ -55,6 +63,7 @@ export default async function Campaigns({
           <h3>{String(c.title)} ↗</h3>
           <p>{String(c.question)}</p>
           <p>{String(c.summary)}</p>
+          <CampaignEvidenceSummary evidence={c.reproduction} />
         </Link>
       ))}
       {!rows.length && (

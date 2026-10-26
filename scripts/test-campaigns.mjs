@@ -264,6 +264,10 @@ try {
     data(await call("get_experiment", { id: b.id })).not_reproduced_count,
     0,
   );
+  assert.equal(
+    data(await call("get_campaign", { id: c.id })).campaign.reproduction.status,
+    "unresolved",
+  );
   const negative = data(
     await call("submit_reproduction", {
       ...report,
@@ -304,7 +308,42 @@ try {
   );
   const full = data(await call("get_reproduction_report", { id: negative.id }));
   assert.equal(JSON.parse(full.content).conditions, report.conditions);
-  data(await call("submit_reproduction", { ...report, result: "reproduced" }));
+  const positive = data(
+    await call("submit_reproduction", {
+      ...report,
+      result: "reproduced",
+      visibility: "private",
+    }),
+  );
+  assert.equal(
+    data(await call("get_campaign", { id: c.id })).campaign.reproduction.status,
+    "not_reproduced",
+  );
+  assert.equal(
+    data(await call("get_campaign", { id: c.id, access_token: other })).campaign
+      .reproduction.status,
+    "mixed",
+  );
+  const privateEvidence = await fetch(base + "/api/experiments/private", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "campaigns", id: c.id, access_token: other }),
+  });
+  assert.equal(privateEvidence.headers.get("cache-control"), "no-store");
+  assert.equal(
+    (await privateEvidence.json()).campaign.campaign.reproduction.status,
+    "mixed",
+  );
+  data(
+    await call("publish_reproduction_report", {
+      id: positive.id,
+      access_token: other,
+    }),
+  );
+  assert.equal(
+    data(await call("get_campaign", { id: c.id })).campaign.reproduction.status,
+    "mixed",
+  );
   assert.equal(
     data(await call("get_experiment", { id: b.id })).reproduction_status,
     "mixed",

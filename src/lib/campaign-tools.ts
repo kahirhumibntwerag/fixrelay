@@ -103,7 +103,7 @@ export function registerCampaignTools(server: McpServer, request: Request) {
     "get_campaign",
     {
       description:
-        "Read a short campaign overview and one page of experiment titles/statuses/visible parent links. No protocols or reports are expanded. Private nodes/links are omitted.",
+        "Read campaign reproduction coverage across all accessible steps plus one page of experiment titles/statuses/visible parent links. Completion is distinct from reproduction. Only accessible reports count. No protocols or reports are expanded. Private nodes/links are omitted.",
       inputSchema: {
         id: z.string().uuid(),
         access_token: accessTokenSchema.optional(),

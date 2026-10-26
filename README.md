@@ -157,3 +157,13 @@ Routes: `/` public registry; `/experiments/:id` public detail and reproduction e
 Next priorities: reliable execution adapters, authenticated researcher identity, independently verified reproduction, protocol/artifact versioning, corrections and withdrawal, token rotation, moderation, semantic similarity, quota retention cleanup, and MCP OAuth. No specific delivery dates are promised.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). No open-source license has been selected yet; public visibility alone does not grant a reuse license.
+
+## Campaign navigation and reproduction coverage
+
+The homepage lists campaigns. `/experiments` is the secondary view of individual experiment records. Campaign cards and details show reproduction coverage across all accessible experiments, independently of the current page. Completing an experiment or supporting its hypothesis does not reproduce it.
+
+A campaign is marked reproduced when all completed experiments have successful reproduction reports, no visible failed reproduction report exists, and no steps remain planned/running. Some confirmed steps yield partially reproduced; contradictory evidence yields mixed; technical obstacles yield unresolved. These are contributor-reported statuses, not verified independent peer review.
+
+Public pages and MCP summaries include public evidence only. The campaign detail page can load evidence accessible to a report/project capability using a POST body and no-store response. A campaign owner token cannot read another contributor’s private reports. Report owners must explicitly publish their private reports before those reports contribute to public status. Tokens are never stored in the URL or browser storage.
+
+Run `npm run test:reproduction-status` for coverage rules, in addition to the MCP campaign integration suite.

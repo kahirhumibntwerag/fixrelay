@@ -66,7 +66,7 @@ export function ExperimentDetail({ record: r }: { record: Experiment }) {
       </div>
       <div className="report-tags">
         {r.tags.map((t) => (
-          <Link key={t} href={`/?tag=${encodeURIComponent(t)}`}>
+          <Link key={t} href={`/experiments?tag=${encodeURIComponent(t)}`}>
             {t}
           </Link>
         ))}
@@ -120,6 +120,13 @@ export function ExperimentDetail({ record: r }: { record: Experiment }) {
             : "This experiment is in progress. Its outcome has not been recorded."}
         </div>
       )}
+      <div className="experiment-verification">
+        <span>Reproduction evidence</span>
+        <ReproductionSummary record={r} />
+        <a className="text-link" href="#reproduction-evidence">
+          Read reports ↓
+        </a>
+      </div>
       {r.replication_of && (
         <div className="trust-note">
           Intentional replication of{" "}
@@ -182,8 +189,8 @@ export function ExperimentDetail({ record: r }: { record: Experiment }) {
           </div>
         </section>
       )}
-      <section className="reproduction-section">
-        <h2>Reproduction evidence</h2>
+      <section className="reproduction-section" id="reproduction-evidence">
+        <h2>Reproduction reports for this experiment</h2>
         <ReproductionSummary record={r} />
         <p className="muted small">
           These are contributor reports under their stated conditions. Identity

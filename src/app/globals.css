@@ -1490,3 +1490,88 @@ button:disabled {
   padding: 10px;
   border-radius: 5px;
 }
+
+/* Research hierarchy and evidence states */
+.view-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+.view-tabs a {
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.view-tabs a[aria-current="page"] {
+  background: #202d19;
+  color: var(--green);
+}
+.campaign-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 16px 0;
+  font-size: 13px;
+}
+.campaign-evidence p {
+  flex-basis: 100%;
+  margin: 0;
+  line-height: 1.7;
+}
+.evidence-access {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin: 24px 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.evidence-access summary {
+  cursor: pointer;
+  color: var(--green);
+}
+.evidence-access .private-form {
+  margin: 16px 0;
+}
+.reproduction-unresolved,
+.reproduction-unreviewed {
+  color: #b5bdc7;
+  background: #171c22;
+  border: 1px solid #343c46;
+}
+.reproduction-partial {
+  color: #eac878;
+  background: #302815;
+  border: 1px solid #69582c;
+}
+@media (max-width: 700px) {
+  .sidebar nav a:first-child {
+    display: flex;
+    background: none;
+    font-size: 11px;
+    padding: 6px;
+  }
+  .sidebar nav a:first-child svg {
+    display: none;
+  }
+  .campaign-evidence {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .view-tabs a {
+    padding: 8px 12px;
+  }
+}
+
+.experiment-verification {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  margin-bottom: 24px;
+  font-size: 13px;
+}

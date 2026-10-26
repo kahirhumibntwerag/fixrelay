@@ -10,7 +10,8 @@
     "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "test:mcp": "node scripts/test-mcp.mjs",
     "test:experiments": "node --env-file=.env.local scripts/test-experiments.mjs",
-    "test:campaigns": "node --env-file=.env.local scripts/test-campaigns.mjs"
+    "test:campaigns": "node --env-file=.env.local scripts/test-campaigns.mjs",
+    "test:reproduction-status": "node --experimental-strip-types scripts/test-reproduction-status.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",

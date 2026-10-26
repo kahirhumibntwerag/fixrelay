@@ -1,10 +1,8 @@
+import { CampaignReader } from "@/components/campaign-reader";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCampaign } from "@/lib/campaigns";
-import {
-  CampaignView,
-  type CampaignViewData,
-} from "@/components/campaign-view";
+import { type CampaignViewData } from "@/components/campaign-view";
 export const dynamic = "force-dynamic";
 export default async function CampaignPage({
   params,
@@ -26,7 +24,10 @@ export default async function CampaignPage({
       <Link className="text-link" href="/campaigns">
         ← All public campaigns
       </Link>
-      <CampaignView data={data as unknown as CampaignViewData} />
+      <CampaignReader
+        key={`${id}:${offset}`}
+        initial={data as unknown as CampaignViewData}
+      />
       {offset > 0 && (
         <Link
           className="text-link"

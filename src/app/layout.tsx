@@ -29,7 +29,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div className="workspace">
               <span className="workspace-icon">F</span>
               <div>
-                Experiment registry<small>Shared memory for research</small>
+                Research campaigns
+                <small>Experiments and reproduction evidence</small>
               </div>
               <Radio size={14} className="green" />
             </div>
@@ -37,8 +38,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <nav>
               <Link href="/">
                 <Search size={17} />
-                Explore experiments
-                <span className="nav-dot" />
+                Campaigns
               </Link>
               <Link href="/connect">
                 <Terminal size={17} />
@@ -49,9 +49,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <BookOpen size={17} />
                 Research guidelines
               </Link>
-              <Link href="/campaigns">
+              <Link href="/experiments">
                 <Radio size={17} />
-                Explore campaigns
+                All experiments
               </Link>
             </nav>
             <div className="side-bottom">
@@ -70,7 +70,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <main>
             <header>
               <div className="breadcrumb">
-                Workspace <span>/</span> Experiment registry
+                Research <span>/</span> Campaigns & experiments
               </div>
               <Link href="/connect" className="header-link">
                 <span className="status-dot" />

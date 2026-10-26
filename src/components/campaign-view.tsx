@@ -1,4 +1,10 @@
 import Link from "next/link";
+import { CampaignEvidenceSummary } from "./campaign-evidence";
+import type {
+  CampaignEvidence,
+  EvidenceCounts,
+} from "@/lib/reproduction-status";
+import { evidenceStatus } from "@/lib/reproduction-status";
 export type CampaignViewData = {
   campaign: {
     id: string;
@@ -6,6 +12,7 @@ export type CampaignViewData = {
     question: string;
     summary: string;
     visibility: string;
+    reproduction: CampaignEvidence;
   };
   experiments: {
     id: string;
@@ -14,6 +21,7 @@ export type CampaignViewData = {
     outcome: string | null;
     reproduced_count?: number;
     not_reproduced_count?: number;
+    unable_to_assess_count?: number;
     parents: {
       parent_id: string;
       title: string;
@@ -57,10 +65,15 @@ export function CampaignView({
       <h1>{c.title}</h1>
       <p className="intro">{c.question}</p>
       <div className="prompt-box">{c.summary}</div>
-      <h2 className="section-heading">Experiment trail</h2>
+      <section className="reproduction-section">
+        <h2>Campaign reproduction</h2>
+        <CampaignEvidenceSummary evidence={c.reproduction} detail />
+      </section>
+      <h2 className="section-heading">Experiments in this campaign</h2>
       <p className="muted small">
-        One page of the campaign DAG. Arrows run from parent to follow-up. Open
-        one experiment for its procedure and reproduction reports.
+        Follow the investigation from parent experiments to their follow-ups.
+        Each step shows its original outcome and its reproduction evidence
+        separately.
       </p>
       <div className="campaign-trail">
         {data.experiments.map((e) => (
@@ -79,17 +92,32 @@ export function CampaignView({
               </p>
             )}
             <div className="report-top">
-              <span className="stage">{e.status}</span>
+              <span className="stage">Execution: {e.status}</span>
               <span>
-                {e.outcome?.replaceAll("_", " ") || "Awaiting result"}
+                {e.outcome
+                  ? `Hypothesis: ${e.outcome.replaceAll("_", " ")}`
+                  : "No result yet"}
               </span>
             </div>
             <h3>{nodeLink(e.id, e.title)}</h3>
+            <span
+              className={`reproduction-badge reproduction-${evidenceStatus(e as EvidenceCounts)}`}
+            >
+              {
+                {
+                  unreviewed: "Awaiting reproduction",
+                  reproduced: "Reproduced",
+                  not_reproduced: "Not reproduced",
+                  mixed: "Mixed reproduction evidence",
+                  unresolved: "Unable to assess",
+                }[evidenceStatus(e as EvidenceCounts)]
+              }
+            </span>
             <p className="muted small">
-              Reproduction reports: {e.reproduced_count || 0} reproduced ·{" "}
-              {e.not_reproduced_count || 0} not reproduced
+              Reports: {e.reproduced_count || 0} reproduced ·{" "}
+              {e.not_reproduced_count || 0} not reproduced ·{" "}
+              {e.unable_to_assess_count || 0} unable to assess
             </p>
-            <span className="report-id">{e.id}</span>
           </article>
         ))}
       </div>

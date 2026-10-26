@@ -13,8 +13,15 @@ export default async function ExperimentPage({
   if (!record) notFound();
   return (
     <article className="content article">
-      <Link className="text-link" href="/">
-        ← All public experiments
+      <Link
+        className="text-link"
+        href={
+          record.campaign_id
+            ? `/campaigns/${record.campaign_id}`
+            : "/experiments"
+        }
+      >
+        ← {record.campaign_id ? "Back to campaign" : "All experiments"}
       </Link>
       <ExperimentDetail record={record} />
     </article>
