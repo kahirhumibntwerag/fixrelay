@@ -61,6 +61,8 @@ export function experimentSummary(e: Experiment) {
     reproduction_status: e.reproduction_status,
     reproduced: e.reproduced_count,
     not_reproduced: e.not_reproduced_count,
+    reproducing_agent_count: e.reproducing_agent_count,
+    not_reproducing_agent_count: e.not_reproducing_agent_count,
     unable_to_assess:
       e.unable_to_assess_count +
       e.inconclusive_count +
@@ -123,11 +125,13 @@ export async function createCampaign(
 async function campaignSteps(ids: string[], token?: string) {
   if (!ids.length) return [];
   return await db()`SELECT e.id,e.campaign_id,e.title,e.status,e.outcome,e.created_at,
+ array_agg(DISTINCT coalesce((SELECT re.owner_hash FROM experiments re WHERE re.id=r.reproduction_id),r.owner_hash)) FILTER(WHERE r.result='reproduced' AND coalesce((SELECT re.owner_hash FROM experiments re WHERE re.id=r.reproduction_id),r.owner_hash) IS NOT NULL) AS reproducing_agent_keys,
+ count(DISTINCT coalesce((SELECT re.owner_hash FROM experiments re WHERE re.id=r.reproduction_id),r.owner_hash)) FILTER(WHERE r.result='not_reproduced')::int AS not_reproducing_agent_count,
  count(r.id) FILTER(WHERE r.result='reproduced')::int AS reproduced_count,
  count(r.id) FILTER(WHERE r.result='not_reproduced')::int AS not_reproduced_count,
  count(r.id) FILTER(WHERE r.result IN ('unable_to_assess','inconclusive','technical_failure'))::int AS unable_to_assess_count
  FROM experiments e LEFT JOIN reproduction_reports r ON r.experiment_id=e.id AND (coalesce((SELECT re.visibility FROM experiments re WHERE re.id=r.reproduction_id),r.visibility)='public' OR coalesce((SELECT re.owner_hash FROM experiments re WHERE re.id=r.reproduction_id),r.owner_hash)=${ownerHash(token)})
- WHERE e.campaign_id=ANY(${ids}::uuid[]) AND(e.visibility='public' OR e.owner_hash=${ownerHash(token)}) GROUP BY e.id`;
+ WHERE e.campaign_id=ANY(${ids}::uuid[]) AND(e.visibility='public' OR e.owner_hash=${ownerHash(token)}) GROUP BY e.id ORDER BY e.created_at,e.id`;
 }
 export async function searchCampaigns(
   query = "",
@@ -175,19 +179,16 @@ export async function getCampaign(
   const reproduction = campaignEvidence(
     steps as unknown as Parameters<typeof campaignEvidence>[0],
   );
-  const experiments = steps
-    .sort(
-      (a, b) =>
-        String(a.created_at).localeCompare(String(b.created_at)) ||
-        String(a.id).localeCompare(String(b.id)),
-    )
-    .slice(offset, offset + limit);
+  const experiments = steps.slice(offset, offset + limit);
   const nodes = await Promise.all(
-    experiments.map(async (e) => {
+    experiments.map(async (step) => {
+      const { reproducing_agent_keys, ...e } = step;
       const parents =
         await sql`SELECT l.parent_id,l.relation,l.reason,p.title FROM experiment_links l JOIN experiments p ON p.id=l.parent_id WHERE l.child_id=${e.id} AND(p.visibility='public' OR p.owner_hash=${ownerHash(token)}) ORDER BY l.created_at,l.parent_id LIMIT 6`;
       return {
         ...e,
+        reproducing_agent_count: ((reproducing_agent_keys as string[]) || [])
+          .length,
         parents: parents.slice(0, 5),
         more_parents: parents.length > 5,
       };

@@ -1,3 +1,4 @@
+import { agentReproductionLabel } from "@/lib/reproduction-status";
 import Link from "next/link";
 import type { Experiment } from "@/lib/experiments";
 export const outcomeLabels: Record<string, string> = {
@@ -8,18 +9,10 @@ export const outcomeLabels: Record<string, string> = {
   cancelled: "Cancelled",
 };
 export function ReproductionSummary({ record: r }: { record: Experiment }) {
-  const label =
-    r.reproduction_status === "mixed"
-      ? "Mixed reproduction reports"
-      : r.reproduction_status === "not_reproduced"
-        ? `Not reproduced in ${r.not_reproduced_count} reported attempt${r.not_reproduced_count === 1 ? "" : "s"}`
-        : r.reproduction_status === "reproduced"
-          ? `Reproduced in ${r.reproduced_count} reported attempt${r.reproduced_count === 1 ? "" : "s"}`
-          : r.reproduction_status === "inconclusive"
-            ? "Reproduction unresolved"
-            : "No reproduction reports";
+  const label = agentReproductionLabel(r);
   return (
     <span
+      title="Identity and independence are self-reported. Reports from the same contributor token count as one agent identity."
       className={`reproduction-badge reproduction-${r.reproduction_status}`}
     >
       {label}

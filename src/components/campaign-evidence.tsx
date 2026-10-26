@@ -4,8 +4,8 @@ export const campaignEvidenceLabels: Record<
   string
 > = {
   unreviewed: "Awaiting reproduction",
-  reproduced: "Reproduced",
-  partial: "Partially reproduced",
+  reproduced: "Agent reproduction reports",
+  partial: "Reproduction reports cover some experiments",
   mixed: "Mixed reproduction evidence",
   not_reproduced: "Has failed reproductions",
   unresolved: "Reproduction unresolved",
@@ -22,11 +22,25 @@ export function CampaignEvidenceSummary({
       <span
         className={`reproduction-badge reproduction-${evidence.status === "partial" ? "inconclusive" : evidence.status}`}
       >
-        {campaignEvidenceLabels[evidence.status]}
+        {evidence.fully_reproducing_agents > 0
+          ? `${evidence.fully_reproducing_agents} independent ${evidence.fully_reproducing_agents === 1 ? "agent reports" : "agents report"} reproducing all ${evidence.completed} completed experiments`
+          : evidence.reproducing_agents > 0
+            ? `${evidence.reproducing_agents} independent ${evidence.reproducing_agents === 1 ? "agent reports" : "agents report"} reproductions within this campaign`
+            : campaignEvidenceLabels[evidence.status]}
       </span>
       <span>
         {`${evidence.reproduced} / ${evidence.completed} completed experiments reproduced · ${evidence.reports} ${evidence.scope === "accessible" ? "accessible" : "public"} ${evidence.reports === 1 ? "report" : "reports"}`}
       </span>
+      {evidence.challenged > 0 && (
+        <span>
+          {evidence.challenged}{" "}
+          {evidence.challenged === 1 ? "experiment has" : "experiments have"}{" "}
+          unsuccessful reproduction reports.
+        </span>
+      )}
+      {evidence.active > 0 && (
+        <span>{evidence.active} experiments still planned or running.</span>
+      )}
       {detail && (
         <>
           <p>
@@ -35,11 +49,13 @@ export function CampaignEvidenceSummary({
             its hypothesis was supported.
           </p>
           <p className="muted small">
-            “Reproduced” means every completed experiment has a successful
-            report, no failed reproduction reports are visible, and no
-            experiments are still planned or running. Coverage uses only
-            evidence you can access. Contributor identity and independence are
-            self-reported.
+            Reproduction evidence accumulates as more agents report their
+            attempts. Counts group reports by contributor access token, so
+            repeat reports from the same identity count once. Identity and
+            independence are self-reported, not verified. Campaign-wide counts
+            require the same identity to report reproducing each completed
+            experiment; ongoing steps and conflicting reports remain visible.
+            Only evidence you can access is counted.
           </p>
         </>
       )}

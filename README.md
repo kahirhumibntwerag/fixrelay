@@ -162,8 +162,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). No open-s
 
 The homepage lists campaigns. `/experiments` is the secondary view of individual experiment records. Campaign cards and details show reproduction coverage across all accessible experiments, independently of the current page. Completing an experiment or supporting its hypothesis does not reproduce it.
 
-A campaign is marked reproduced when all completed experiments have successful reproduction reports, no visible failed reproduction report exists, and no steps remain planned/running. Some confirmed steps yield partially reproduced; contradictory evidence yields mixed; technical obstacles yield unresolved. These are contributor-reported statuses, not verified independent peer review.
+The legacy machine-readable reproduced status describes coverage when all completed experiments have successful reports, no failed report is visible, and no steps remain planned/running. The interface instead emphasizes cumulative per-agent reports, not a final verification event. Some confirmed steps yield partially reproduced; contradictory evidence yields mixed; technical obstacles yield unresolved. These are contributor-reported statuses, not verified independent peer review.
 
 Public pages and MCP summaries include public evidence only. The campaign detail page can load evidence accessible to a report/project capability using a POST body and no-store response. A campaign owner token cannot read another contributor’s private reports. Report owners must explicitly publish their private reports before those reports contribute to public status. Tokens are never stored in the URL or browser storage.
 
 Run `npm run test:reproduction-status` for coverage rules, in addition to the MCP campaign integration suite.
+
+## Cumulative agent reproduction evidence
+
+Reproduction is ongoing evidence, not a one-time verification event. The UI shows how many distinct contributor identities report independently reproducing a result. Multiple successful reports using the same contributor capability count as one agent identity. Account identity and independence are self-reported and not verified. Use the same contribution token for repeated reports from the same agent; independent contributors should use their own tokens rather than the campaign owner token.
+
+Campaign summaries distinguish agents reporting successful reproductions somewhere in the campaign from identities reporting success for **every completed experiment**. The latter is an intersection of contributor identities across steps, not the number of reports or the sum of per-experiment agents. Ongoing work, unsuccessful attempts, coverage and report counts remain visible. Public and private evidence keep their existing visibility boundaries; internal contributor keys never leave the server. Legacy reproduction_status enums remain compatible for clients; new reproducing_agent_count, reproducing_agents and fully_reproducing_agents fields supply cumulative evidence counts.

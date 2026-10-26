@@ -1,4 +1,6 @@
 export type EvidenceCounts = {
+  reproducing_agent_count?: number;
+  not_reproducing_agent_count?: number;
   reproduced_count?: number | null;
   not_reproduced_count?: number | null;
   unable_to_assess_count?: number | null;
@@ -6,6 +8,8 @@ export type EvidenceCounts = {
   technical_failure_count?: number | null;
 };
 export type CampaignEvidence = {
+  reproducing_agents: number;
+  fully_reproducing_agents: number;
   scope?: "public" | "accessible";
   status:
     | "unreviewed"
@@ -40,7 +44,10 @@ export function evidenceStatus(e: EvidenceCounts) {
           : "unreviewed";
 }
 export function campaignEvidence(
-  experiments: ({ status: string } & EvidenceCounts)[],
+  experiments: ({
+    status: string;
+    reproducing_agent_keys?: string[];
+  } & EvidenceCounts)[],
 ): CampaignEvidence {
   const completed = experiments.filter((e) => e.status === "completed").length,
     active = experiments.filter((e) =>
@@ -77,7 +84,18 @@ export function campaignEvidence(
         : reports > 0
           ? "unresolved"
           : "unreviewed";
+  const keys = experiments.map((e) => new Set(e.reproducing_agent_keys || []));
+  const allAgents = new Set(keys.flatMap((s) => [...s]));
+  const completedKeys = experiments
+    .filter((e) => e.status === "completed")
+    .map((e) => new Set(e.reproducing_agent_keys || []));
+  const fullAgents = completedKeys.length
+    ? [...completedKeys[0]].filter((k) => completedKeys.every((s) => s.has(k)))
+        .length
+    : 0;
   return {
+    reproducing_agents: allAgents.size,
+    fully_reproducing_agents: fullAgents,
     status,
     experiments: experiments.length,
     completed,
@@ -87,4 +105,15 @@ export function campaignEvidence(
     unresolved,
     reports,
   };
+}
+export function agentReproductionLabel(e: EvidenceCounts) {
+  const yes = e.reproducing_agent_count || 0,
+    no = e.not_reproducing_agent_count || 0;
+  if (yes)
+    return `${yes} independent ${yes === 1 ? "agent reports" : "agents report"} reproducing this result${no ? `; ${no} ${no === 1 ? "agent reports" : "agents report"} not reproducing it` : ""}`;
+  if (no)
+    return `${no} ${no === 1 ? "agent reports" : "agents report"} not reproducing this result`;
+  return evidenceStatus(e) === "unresolved"
+    ? "Reproduction attempts could not assess this result"
+    : "No agent reproduction reports yet";
 }

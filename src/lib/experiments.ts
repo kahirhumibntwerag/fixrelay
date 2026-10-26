@@ -158,6 +158,8 @@ export type Experiment = {
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
+  reproducing_agent_count: number;
+  not_reproducing_agent_count: number;
   reproduced_count: number;
   not_reproduced_count: number;
   inconclusive_count: number;
@@ -193,6 +195,8 @@ function clean(row: Record<string, unknown>): Experiment {
     unable = Number(row.unable_to_assess_count || 0);
   return {
     ...record,
+    reproducing_agent_count: Number(row.reproducing_agent_count || 0),
+    not_reproducing_agent_count: Number(row.not_reproducing_agent_count || 0),
     reproduced_count: yes,
     not_reproduced_count: no,
     inconclusive_count: uncertain,
@@ -218,6 +222,8 @@ export async function searchExperiments(
     sql = db();
   const rows =
     await sql`SELECT e.*,s.reproduced_count,s.not_reproduced_count,s.inconclusive_count,s.technical_failure_count,s.unable_to_assess_count,
+ (SELECT count(DISTINCT coalesce(re.owner_hash,r.owner_hash))::int FROM reproduction_reports r LEFT JOIN experiments re ON re.id=r.reproduction_id WHERE r.experiment_id=e.id AND r.result='reproduced' AND coalesce(re.visibility,r.visibility)='public') AS reproducing_agent_count,
+ (SELECT count(DISTINCT coalesce(re.owner_hash,r.owner_hash))::int FROM reproduction_reports r LEFT JOIN experiments re ON re.id=r.reproduction_id WHERE r.experiment_id=e.id AND r.result='not_reproduced' AND coalesce(re.visibility,r.visibility)='public') AS not_reproducing_agent_count,
  (SELECT c.id FROM campaigns c WHERE c.id=e.campaign_id AND (c.visibility='public' OR c.owner_hash=${ownerHash(p.access_token)})) AS accessible_campaign_id,
  (SELECT c.title FROM campaigns c WHERE c.id=e.campaign_id AND (c.visibility='public' OR c.owner_hash=${ownerHash(p.access_token)})) AS campaign_title
  FROM experiments e LEFT JOIN public_reproduction_summary s ON s.experiment_id=e.id WHERE ((visibility='public' AND ${p.scope}<>'owned') OR owner_hash=${ownerHash(p.access_token)})
@@ -235,10 +241,22 @@ export async function getExperiment(id: string, token?: string) {
  FROM experiments e WHERE id=${id} AND (visibility='public' OR owner_hash=${ownerHash(token)})`;
   if (!rows[0]) return null;
   const reports =
-    await sql`SELECT r.id,r.experiment_id,r.reproduction_id,r.result,r.observations,r.evidence,r.differences,r.created_at,e.title AS reproduction_title,coalesce(e.agent,r.agent) AS agent,coalesce(e.conditions,r.conditions) AS conditions,coalesce(e.visibility,r.visibility) AS visibility FROM reproduction_reports r LEFT JOIN experiments e ON e.id=r.reproduction_id WHERE r.experiment_id=${id} AND (coalesce(e.visibility,r.visibility)='public' OR coalesce(e.owner_hash,r.owner_hash)=${ownerHash(token)}) ORDER BY r.created_at DESC`;
+    await sql`SELECT r.id,r.experiment_id,r.reproduction_id,r.result,r.observations,r.evidence,r.differences,r.created_at,e.title AS reproduction_title,coalesce(e.owner_hash,r.owner_hash) AS report_owner_key,coalesce(e.agent,r.agent) AS agent,coalesce(e.conditions,r.conditions) AS conditions,coalesce(e.visibility,r.visibility) AS visibility FROM reproduction_reports r LEFT JOIN experiments e ON e.id=r.reproduction_id WHERE r.experiment_id=${id} AND (coalesce(e.visibility,r.visibility)='public' OR coalesce(e.owner_hash,r.owner_hash)=${ownerHash(token)}) ORDER BY r.created_at DESC`;
   return {
     ...clean({
       ...rows[0],
+      reproducing_agent_count: new Set(
+        reports
+          .filter((r) => r.result === "reproduced")
+          .map((r) => r.report_owner_key)
+          .filter(Boolean),
+      ).size,
+      not_reproducing_agent_count: new Set(
+        reports
+          .filter((r) => r.result === "not_reproduced")
+          .map((r) => r.report_owner_key)
+          .filter(Boolean),
+      ).size,
       reproduced_count: reports.filter((r) => r.result === "reproduced").length,
       not_reproduced_count: reports.filter((r) => r.result === "not_reproduced")
         .length,
@@ -251,7 +269,9 @@ export async function getExperiment(id: string, token?: string) {
         (r) => r.result === "unable_to_assess",
       ).length,
     }),
-    reproductions: reports as ReproductionReport[],
+    reproductions: reports.map(
+      ({ report_owner_key, ...report }) => report,
+    ) as ReproductionReport[],
   };
 }
 export async function quota(identity: string) {

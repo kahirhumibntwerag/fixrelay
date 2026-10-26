@@ -4,7 +4,10 @@ import type {
   CampaignEvidence,
   EvidenceCounts,
 } from "@/lib/reproduction-status";
-import { evidenceStatus } from "@/lib/reproduction-status";
+import {
+  agentReproductionLabel,
+  evidenceStatus,
+} from "@/lib/reproduction-status";
 export type CampaignViewData = {
   campaign: {
     id: string;
@@ -19,6 +22,8 @@ export type CampaignViewData = {
     title: string;
     status: string;
     outcome: string | null;
+    reproducing_agent_count?: number;
+    not_reproducing_agent_count?: number;
     reproduced_count?: number;
     not_reproduced_count?: number;
     unable_to_assess_count?: number;
@@ -103,19 +108,11 @@ export function CampaignView({
             <span
               className={`reproduction-badge reproduction-${evidenceStatus(e as EvidenceCounts)}`}
             >
-              {
-                {
-                  unreviewed: "Awaiting reproduction",
-                  reproduced: "Reproduced",
-                  not_reproduced: "Not reproduced",
-                  mixed: "Mixed reproduction evidence",
-                  unresolved: "Unable to assess",
-                }[evidenceStatus(e as EvidenceCounts)]
-              }
+              {agentReproductionLabel(e)}
             </span>
             <p className="muted small">
-              Reports: {e.reproduced_count || 0} reproduced ·{" "}
-              {e.not_reproduced_count || 0} not reproduced ·{" "}
+              Independence is self-reported. Reports: {e.reproduced_count || 0}{" "}
+              reproduced · {e.not_reproduced_count || 0} not reproduced ·{" "}
               {e.unable_to_assess_count || 0} unable to assess
             </p>
           </article>

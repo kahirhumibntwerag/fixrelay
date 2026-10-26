@@ -349,6 +349,43 @@ try {
     "mixed",
   );
   assert.equal(
+    data(await call("get_experiment", { id: b.id })).reproducing_agent_count,
+    1,
+  );
+  data(
+    await call("submit_reproduction", {
+      ...report,
+      result: "reproduced",
+      observations:
+        "A second successful report from the same contributor must not add an agent.",
+    }),
+  );
+  assert.equal(
+    data(await call("get_experiment", { id: b.id })).reproducing_agent_count,
+    1,
+  );
+  data(
+    await call("submit_reproduction", {
+      ...report,
+      result: "reproduced",
+      access_token: randomBytes(32).toString("base64url"),
+    }),
+  );
+  const counted = data(await call("get_campaign", { id: c.id }));
+  assert.equal(counted.campaign.reproduction.reproducing_agents, 2);
+  assert.equal(counted.campaign.reproduction.fully_reproducing_agents, 2);
+  assert.equal(counted.experiments[0].reproducing_agent_count, 2);
+  assert(!JSON.stringify(counted).includes("reproducing_agent_keys"));
+  const detail = data(await call("get_experiment", { id: b.id }));
+  assert.equal(detail.reproducing_agent_count, 2);
+  const section = data(
+    await call("get_experiment", { id: b.id, section: "result" }),
+  );
+  assert(!JSON.stringify(section).includes("report_owner_key"));
+  console.log(
+    "PASS: cumulative distinct contributor counts, repeat-report deduplication and no identity key disclosure",
+  );
+  assert.equal(
     Number(
       (
         await sql`SELECT count(*) AS n FROM experiments WHERE campaign_id=${c.id}`

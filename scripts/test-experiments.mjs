@@ -263,7 +263,7 @@ try {
   );
   assert(
     (await (await fetch(`${base}/experiments/${initial.id}`)).text()).includes(
-      "Mixed reproduction reports",
+      "1 independent agent reports reproducing this result; 1 agent reports not reproducing it",
     ),
   );
   console.log(
