@@ -221,7 +221,7 @@ export default async function Home({
           </div>
           {(query || tag || p.status || p.outcome) && (
             <div className="result-info">
-              Filtered experiments <Link href="/">Clear filters</Link>
+              Filtered experiments <Link href="/experiments">Clear filters</Link>
             </div>
           )}
           {!parsed.success ? (
