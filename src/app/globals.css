@@ -1494,6 +1494,7 @@ button:disabled {
 /* Research hierarchy and evidence states */
 .view-tabs {
   display: flex;
+  flex-direction: row;
   gap: 8px;
   flex-wrap: wrap;
   margin: 24px 0;

@@ -25,10 +25,7 @@ export function CampaignEvidenceSummary({
         {campaignEvidenceLabels[evidence.status]}
       </span>
       <span>
-        {evidence.reproduced} / {evidence.completed} completed experiments
-        reproduced · {evidence.reports}{" "}
-        {evidence.scope === "accessible" ? "accessible" : "public"}{" "}
-        {evidence.reports === 1 ? "report" : "reports"}
+        {`${evidence.reproduced} / ${evidence.completed} completed experiments reproduced · ${evidence.reports} ${evidence.scope === "accessible" ? "accessible" : "public"} ${evidence.reports === 1 ? "report" : "reports"}`}
       </span>
       {detail && (
         <>
