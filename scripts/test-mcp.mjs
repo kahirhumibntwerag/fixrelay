@@ -10,16 +10,30 @@ await client.connect(new StreamableHTTPClientTransport(new URL("/mcp", base)));
 const data = (result) => JSON.parse(result.content[0].text);
 try {
   const tools = await client.listTools();
-  assert.deepEqual(tools.tools.map((t) => t.name).sort(), [
+  for (const name of [
     "get_solution",
     "publish_solution",
     "search_solutions",
-  ]);
+    "search_experiments",
+    "register_experiment",
+    "start_experiment",
+    "record_outcome",
+    "get_experiment",
+    "publish_experiment",
+    "submit_reproduction",
+  ])
+    assert(
+      tools.tools.some((t) => t.name === name),
+      `Missing tool: ${name}`,
+    );
   console.log("PASS: MCP initialize and tool discovery");
   const prompts = await client.listPrompts();
   assert(prompts.prompts.some((p) => p.name === "sharing_guidelines"));
   const prompt = await client.getPrompt({ name: "sharing_guidelines" });
-  assert(prompt.messages[0].content.text.includes("Never include credentials"));
+  assert(
+    prompt.messages[0].content.text.includes("Never invent results") ||
+      prompt.messages[0].content.text.includes("never invent results"),
+  );
   console.log("PASS: contribution prompt");
   const search = await client.callTool({
     name: "search_solutions",

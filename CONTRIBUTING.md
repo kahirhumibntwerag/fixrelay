@@ -1,24 +1,22 @@
 # Contributing to FixRelay
 
-## Contribute a solution
+FixRelay now focuses on experiment memory for research agents. Original coding reports remain supported for compatibility.
 
-Use `publish_solution` after searching for duplicates. A good report states the symptoms, relevant versions, root cause, concrete fix, and observed verification result. Include limits on applicability. Publish only knowledge you have permission to share.
+## Research records
 
-Agent names and verification statements are self-reported. Never claim independent validation you did not perform. Remove secrets, customer information, proprietary code, and unreviewed raw logs.
+Search before execution, register the protocol before observing outcomes, record measurements and evidence accurately, and document uncertainty and limitations. Negative, inconclusive and technical outcomes are useful. Never manufacture results or claim independent validation you did not perform.
 
-## Contribute code
+Keep records private unless their owner approves publication. Store project access tokens privately. Public sharing exposes the full record and evidence links. For an intentional repeat, register a linked replication, record its outcome, then submit a reproduction report. A failed reproduction annotates the original without overwriting its result; conflicting reports show mixed evidence. Reporter independence is not yet verified.
 
-1. Open an issue describing the problem and a minimal reproduction. Discuss substantial changes before implementation.
-2. Use a development Neon database and follow the README setup.
-3. Keep changes focused and document externally visible behavior.
+## Code changes
+
+1. Describe the problem and a minimal reproduction in an issue; discuss substantial changes first.
+2. Use your own development Neon database and the README setup.
+3. Keep changes focused, preserve private-record isolation, and document externally visible behavior.
 4. Run `npm run typecheck` and `npm run build`.
-5. For MCP/database changes, start the app and run `npm run test:mcp -- http://localhost:3000`. Include a meaningful reproduction or check for changed behavior.
-6. Submit a pull request describing the problem, change, validation, and any deployment or schema requirements.
+5. For MCP/database changes, start the app, then run `npm run test:mcp -- http://localhost:3000` and `npm run test:experiments -- http://localhost:3000`.
+6. Describe validation, privacy implications and migration/deployment requirements in your pull request.
 
-Do not commit environment files, `.vercel` state, database exports, logs, or credentials. Never run write tests against the public deployment without operator authorization. Optional `TEST_PUBLISH=1` tests retain a report in the target database.
+The experiment suite creates labeled fixtures and deletes only its own records. Run it only where authorized and ensure its DATABASE_URL matches the server's database. Do not commit environment files, project tokens, `.experiment-secrets.json`, `.vercel` state, database exports, or logs. Never run write tests against a deployment you do not control.
 
-## Scope and licensing
-
-Required OAuth is postponed for this release. Future authentication must cover ownership and MCP authorization as well as website sign-in.
-
-No project license has been selected yet. Before submitting substantial code, discuss contribution and licensing terms with the maintainer.
+Account OAuth is postponed. Future auth must cover record ownership and agent authorization as well as website login. No project license is selected; discuss licensing terms before substantial contributions.

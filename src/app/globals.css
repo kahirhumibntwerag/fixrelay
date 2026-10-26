@@ -1189,3 +1189,243 @@ footer {
     gap: 12px;
   }
 }
+
+/* Experiment registry */
+.secondary {
+  background: #20272c;
+  color: #c5ced8;
+  border: 1px solid #35404a;
+}
+.experiment-filters {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  margin-top: 13px;
+  flex-wrap: wrap;
+}
+.experiment-filters label {
+  font-size: 10px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 120px;
+}
+.experiment-filters select {
+  color: #c4ced7;
+  background: #161c22;
+  border: 1px solid #303a43;
+  border-radius: 5px;
+  padding: 9px;
+  font: inherit;
+  font-size: 11px;
+}
+.experiment-filters button {
+  padding: 10px;
+  font-size: 10px;
+}
+.stage {
+  text-transform: capitalize;
+  font-size: 10px;
+  padding: 4px 7px;
+  border: 1px solid #354232;
+  border-radius: 4px;
+  color: #b0c99b;
+}
+.stage-running {
+  color: #9bcdf2;
+  border-color: #2e4b60;
+}
+.stage-cancelled {
+  color: #aaa;
+  border-color: #444;
+}
+.outcome-banner {
+  border: 1px solid #405431;
+  background: #192213;
+  padding: 20px;
+  border-radius: 8px;
+  margin: 25px 0;
+}
+.outcome-banner p {
+  color: #98a98b;
+  font-size: 12px;
+  line-height: 1.8;
+  margin-bottom: 0;
+}
+.outcome-not_supported,
+.outcome-technical_failure {
+  border-color: #665238;
+  background: #211c14;
+}
+.outcome-inconclusive,
+.outcome-cancelled {
+  border-color: #46505c;
+  background: #181d24;
+}
+.lifecycle {
+  display: flex;
+  gap: 18px;
+  padding: 24px 0;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+.lifecycle > span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.9;
+  flex: 1;
+  min-width: 160px;
+}
+.lifecycle strong {
+  font-size: 10px;
+  color: #b3bec7;
+  font-weight: 400;
+}
+.measurements {
+  margin: 0;
+}
+.measurements > div {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: 12px;
+}
+.measurements dt {
+  color: var(--muted);
+}
+.measurements dd {
+  margin: 0;
+  color: var(--green);
+}
+.artifact-link {
+  display: block;
+  font-size: 11px;
+  color: var(--green);
+  margin: 13px 0;
+  overflow-wrap: anywhere;
+}
+.private-form {
+  padding: 22px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 18px;
+}
+.private-form label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+.private-form input {
+  display: block;
+  width: 100%;
+  margin-top: 9px;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid #38434d;
+  border-radius: 5px;
+}
+.workspace-result {
+  display: block;
+  width: 100%;
+  background: none;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+}
+.workspace-result:hover {
+  background: #141a14;
+}
+.plain-button {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+.legacy-link {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  padding: 22px 0;
+}
+.pagination button {
+  background: none;
+  border: 0;
+  color: var(--green);
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.reproduction-section {
+  margin: 35px 0;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #11171b;
+}
+.reproduction-section h2 {
+  margin-bottom: 17px;
+}
+.reproduction-badge {
+  display: inline-block;
+  padding: 5px 8px;
+  border: 1px solid #3c4652;
+  border-radius: 5px;
+  font-size: 10px;
+  color: #a5afba;
+  margin: 0 0 12px;
+}
+.reproduction-not_reproduced {
+  background: #30231a;
+  border-color: #815b3d;
+  color: #f0ba87;
+}
+.reproduction-reproduced {
+  background: #1c2b16;
+  border-color: #4f6c38;
+  color: var(--green);
+}
+.reproduction-mixed {
+  background: #2c273b;
+  border-color: #685c89;
+  color: #c8b5f0;
+}
+.reproduction-report {
+  border-top: 1px solid var(--border);
+  margin-top: 22px;
+  padding-top: 20px;
+}
+.reproduction-report strong {
+  text-transform: capitalize;
+  font-size: 13px;
+}
+.reproduction-report p {
+  font-size: 11px;
+  line-height: 1.8;
+  color: #9fabba;
+}
+.reproduction-report h4 {
+  font-size: 11px;
+  color: #adbac8;
+  margin-bottom: 8px;
+}
+.reproduction-report pre {
+  font:
+    12px "DM Sans",
+    sans-serif;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.9;
+  color: #9cabb9;
+}

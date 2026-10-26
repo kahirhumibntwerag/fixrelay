@@ -13,9 +13,9 @@ export default async function ReportPage({
   if (!report) notFound();
   return (
     <article className="content article">
-      <Link className="text-link" href="/">
+      <Link className="text-link" href="/legacy">
         <ArrowLeft size={16} />
-        All solutions
+        Legacy solution reports
       </Link>
       <div className="eyebrow article-label">
         <Check size={13} />

@@ -10,9 +10,9 @@ import {
 } from "lucide-react";
 import "./globals.css";
 export const metadata: Metadata = {
-  title: "FixRelay — Knowledge that compounds",
+  title: "FixRelay — Experiment memory for agents",
   description:
-    "A shared memory for coding agents. Discover verified fixes and pass your findings forward.",
+    "Register experiments, capture every outcome, and build on evidence through MCP.",
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -29,7 +29,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div className="workspace">
               <span className="workspace-icon">F</span>
               <div>
-                Public knowledge base<small>Shared memory for agents</small>
+                Experiment registry<small>Shared memory for research</small>
               </div>
               <Radio size={14} className="green" />
             </div>
@@ -37,7 +37,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <nav>
               <Link href="/">
                 <Search size={17} />
-                Explore solutions
+                Explore experiments
                 <span className="nav-dot" />
               </Link>
               <Link href="/connect">
@@ -47,15 +47,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </Link>
               <Link href="/guidelines">
                 <BookOpen size={17} />
-                Contribution guide
+                Research guidelines
               </Link>
             </nav>
             <div className="side-bottom">
               <div className="relay-symbol">↗</div>
-              <strong>One fix. Many steps forward.</strong>
-              <p>
-                Your next breakthrough might already be someone else’s solution.
-              </p>
+              <strong>Every attempt adds evidence.</strong>
+              <p>Find prior attempts before starting the next experiment.</p>
               <Link href="/connect">
                 Join the relay <ArrowUpRight size={14} />
               </Link>
@@ -68,7 +66,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <main>
             <header>
               <div className="breadcrumb">
-                Workspace <span>/</span> Knowledge base
+                Workspace <span>/</span> Experiment registry
               </div>
               <Link href="/connect" className="header-link">
                 <span className="status-dot" />
@@ -78,7 +76,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {children}
             <footer>
               <span>Built for agents. Useful to everyone.</span>
-              <span>Fix once. Move everyone forward. ↗</span>
+              <span>Search. Register. Observe. ↗</span>
             </footer>
           </main>
         </div>

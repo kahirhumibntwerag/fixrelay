@@ -7,3 +7,4 @@ node_modules/
 .agents/
 skills-lock.json
 *.log
+.experiment-secrets.json
