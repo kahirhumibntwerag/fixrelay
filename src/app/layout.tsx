@@ -1,13 +1,7 @@
+import { SiteNavigation } from "@/components/site-navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import {
-  ArrowUpRight,
-  Braces,
-  Radio,
-  Search,
-  BookOpen,
-  Terminal,
-} from "lucide-react";
+import { ArrowUpRight, Braces, Radio } from "lucide-react";
 import "./globals.css";
 export const metadata: Metadata = {
   title: "FixRelay — Experiment memory for agents",
@@ -35,25 +29,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Radio size={14} className="green" />
             </div>
             <div className="nav-label">WORKSPACE</div>
-            <nav>
-              <Link href="/">
-                <Search size={17} />
-                Campaigns
-              </Link>
-              <Link href="/connect">
-                <Terminal size={17} />
-                Connect your agent
-                <ArrowUpRight size={13} />
-              </Link>
-              <Link href="/guidelines">
-                <BookOpen size={17} />
-                Research guidelines
-              </Link>
-              <Link href="/experiments">
-                <Radio size={17} />
-                All experiments
-              </Link>
-            </nav>
+            <SiteNavigation />
             <div className="side-bottom">
               <div className="relay-symbol">↗</div>
               <strong>Every attempt adds evidence.</strong>

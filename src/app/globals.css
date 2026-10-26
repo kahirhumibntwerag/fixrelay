@@ -144,7 +144,7 @@ nav a {
   border-radius: 6px;
   color: #a0a6af;
 }
-nav a:first-child {
+nav a[aria-current="page"] {
   background: #222a1e;
   color: var(--green);
 }
