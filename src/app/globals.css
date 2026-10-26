@@ -1,5 +1,6 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Manrope:wght@400;500;600;650;700;750;800&display=swap");
 :root {
+  color-scheme: dark;
   --bg: #0c0e11;
   --panel: #111419;
   --border: #24282e;
@@ -10,6 +11,11 @@
 }
 * {
   box-sizing: border-box;
+}
+html,
+body {
+  height: 100%;
+  overflow: hidden;
 }
 body {
   margin: 0;
@@ -42,7 +48,8 @@ input:focus-visible {
 }
 .shell {
   display: flex;
-  min-height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 .sidebar {
   width: 238px;
@@ -53,6 +60,8 @@ input:focus-visible {
   display: flex;
   flex-direction: column;
   background: #101216;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 .brand {
   display: flex;
@@ -198,6 +207,12 @@ nav a:hover {
 main {
   margin-left: 238px;
   width: calc(100% - 238px);
+  min-width: 0;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
 }
 header {
   height: 75px;
@@ -1061,6 +1076,7 @@ footer {
   main {
     width: 100%;
     margin: 65px 0 0;
+    height: calc(100dvh - 65px);
   }
   header {
     height: 55px;
