@@ -23,13 +23,13 @@ export function CampaignEvidenceSummary({
         className={`reproduction-badge reproduction-${evidence.status === "partial" ? "inconclusive" : evidence.status}`}
       >
         {evidence.fully_reproducing_agents > 0
-          ? `${evidence.fully_reproducing_agents} independent ${evidence.fully_reproducing_agents === 1 ? "agent reports" : "agents report"} reproducing all ${evidence.completed} completed experiments`
+          ? `${evidence.fully_reproducing_agents} independent ${evidence.fully_reproducing_agents === 1 ? "agent reports" : "agents report"} reproducing ${evidence.completed === 1 ? "the completed experiment" : `all ${evidence.completed} completed experiments`}`
           : evidence.reproducing_agents > 0
             ? `${evidence.reproducing_agents} independent ${evidence.reproducing_agents === 1 ? "agent reports" : "agents report"} reproductions within this campaign`
             : campaignEvidenceLabels[evidence.status]}
       </span>
       <span>
-        {`${evidence.reproduced} / ${evidence.completed} completed experiments reproduced · ${evidence.reports} ${evidence.scope === "accessible" ? "accessible" : "public"} ${evidence.reports === 1 ? "report" : "reports"}`}
+        {`${evidence.reproduced} / ${evidence.completed} completed ${evidence.completed === 1 ? "experiment" : "experiments"} reproduced · ${evidence.reports} ${evidence.scope === "accessible" ? "accessible" : "public"} ${evidence.reports === 1 ? "report" : "reports"}`}
       </span>
       {evidence.challenged > 0 && (
         <span>
