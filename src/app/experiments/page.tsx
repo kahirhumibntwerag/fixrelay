@@ -160,7 +160,7 @@ export default async function Home({
             </h2>
             <span className="muted small">Public records · self-reported</span>
           </div>
-          <form action="/">
+          <form action="/experiments">
             <div className="search">
               <Search size={18} />
               <input
