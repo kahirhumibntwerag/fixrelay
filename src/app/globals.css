@@ -1600,7 +1600,13 @@ button:disabled {
   color: var(--green);
 }
 .snippet-box > p.copy-feedback:empty {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .snippet-box > p.copy-feedback {
   color: #c5e1b1;
