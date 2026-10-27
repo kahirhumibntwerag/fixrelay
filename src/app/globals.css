@@ -81,6 +81,10 @@ input:focus-visible {
   display: grid;
   place-items: center;
 }
+.brand-icon svg {
+  width: 27px;
+  height: 27px;
+}
 .beta {
   font:
     9px "DM Sans",
