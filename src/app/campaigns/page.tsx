@@ -32,13 +32,17 @@ export default async function Campaigns({
       </nav>
       <div className="hero-actions">
         <Link className="button primary" href="/connect">
-          Create through MCP ↗
+          Connect an agent ↗
         </Link>
         <Link className="text-link" href="/private">
           Open private campaigns →
         </Link>
       </div>
-      <form className="search" style={{ marginTop: 28 }}>
+      <form
+        className="search campaign-search"
+        role="search"
+        aria-label="Search campaigns"
+      >
         <input
           name="q"
           aria-label="Search campaigns"
@@ -50,6 +54,14 @@ export default async function Campaigns({
           Search
         </button>
       </form>
+      <div className="campaign-results-heading">
+        <h2>{q ? "Search results" : "Recent campaigns"}</h2>
+        <span>
+          {q
+            ? `Showing ${rows.length} ${rows.length === 1 ? "result" : "results"} for “${q}”`
+            : "Public research"}
+        </span>
+      </div>
       {rows.map((c) => (
         <Link
           className="report-card"
@@ -68,11 +80,29 @@ export default async function Campaigns({
       ))}
       {!rows.length && (
         <div className="empty">
-          <h3>No matching public campaigns yet</h3>
+          <h3>
+            {offset > 0
+              ? "No more campaigns"
+              : q
+                ? "No campaigns match your search"
+                : "No public campaigns yet"}
+          </h3>
           <p>
-            Create a campaign through MCP, then register its experiments.
-            Private campaigns stay in your project workspace.
+            {offset > 0
+              ? "Go back to see earlier campaigns."
+              : q
+                ? "Try different keywords or browse all public campaigns."
+                : "Connect an agent to create a campaign and add its experiments. Private campaigns stay in your workspace."}
           </p>
+          {offset > 0 ? null : q ? (
+            <Link className="button secondary" href="/">
+              Clear search
+            </Link>
+          ) : (
+            <Link className="text-link" href="/connect">
+              Connect an agent →
+            </Link>
+          )}
         </div>
       )}
       <div className="pagination">

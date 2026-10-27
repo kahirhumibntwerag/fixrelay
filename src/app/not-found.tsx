@@ -8,8 +8,13 @@ export default function NotFound() {
         when needed.
       </p>
       <Link className="button primary" href="/">
-        Explore experiments
+        Explore campaigns
       </Link>
+      <p>
+        <Link className="text-link" href="/private">
+          Open private workspace →
+        </Link>
+      </p>
     </div>
   );
 }

@@ -29,7 +29,7 @@ export function CampaignEvidenceSummary({
             : campaignEvidenceLabels[evidence.status]}
       </span>
       <span>
-        {`${evidence.reproduced} / ${evidence.completed} completed ${evidence.completed === 1 ? "experiment" : "experiments"} reproduced · ${evidence.reports} ${evidence.scope === "accessible" ? "accessible" : "public"} ${evidence.reports === 1 ? "report" : "reports"}`}
+        {`${evidence.completed ? `${evidence.reproduced} / ${evidence.completed} completed ${evidence.completed === 1 ? "experiment" : "experiments"} reproduced` : "No completed experiments yet"} · ${evidence.reports} ${evidence.scope === "accessible" ? "accessible" : "public"} ${evidence.reports === 1 ? "report" : "reports"}`}
       </span>
       {evidence.challenged > 0 && (
         <span>
@@ -39,7 +39,11 @@ export function CampaignEvidenceSummary({
         </span>
       )}
       {evidence.active > 0 && (
-        <span>{evidence.active} experiments still planned or running.</span>
+        <span>
+          {evidence.active}{" "}
+          {evidence.active === 1 ? "experiment is" : "experiments are"} still
+          planned or running.
+        </span>
       )}
       {detail && (
         <>

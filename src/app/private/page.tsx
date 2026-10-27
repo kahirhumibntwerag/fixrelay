@@ -24,8 +24,12 @@ export default function PrivateWorkspace() {
     [offset, setOffset] = useState(0),
     [loaded, setLoaded] = useState(false),
     [busy, setBusy] = useState(false),
+    [loadingId, setLoadingId] = useState<string | null>(null),
     [error, setError] = useState("");
   const generation = useRef(0);
+  const resultsScroll = useRef(0);
+  const campaignScroll = useRef(0);
+  const previousRecord = useRef<string | null>(null);
   function clear() {
     generation.current++;
     setRecords([]);
@@ -34,9 +38,18 @@ export default function PrivateWorkspace() {
     setLoaded(false);
     setError("");
     setBusy(false);
+    setLoadingId(null);
   }
   async function read(next = 0, id?: string, requestedKind = kind) {
     const ticket = ++generation.current;
+    if (id) {
+      setLoadingId(id);
+      previousRecord.current = id;
+      if (!campaign)
+        resultsScroll.current = document.querySelector("main")?.scrollTop || 0;
+      else if (requestedKind === "experiments")
+        campaignScroll.current = document.querySelector("main")?.scrollTop || 0;
+    }
     setBusy(true);
     setError("");
     try {
@@ -57,9 +70,23 @@ export default function PrivateWorkspace() {
       if (!res.ok) throw new Error(data.error);
       if (id) {
         if (requestedKind === "campaigns") {
+          const paging = Boolean(campaign);
           setCampaign(data.campaign);
           setSelected(null);
-        } else setSelected(data.experiment);
+          requestAnimationFrame(() =>
+            (paging
+              ? document.getElementById("campaign-experiments")
+              : document.getElementById("workspace-content")
+            )?.scrollIntoView({ block: "start" }),
+          );
+        } else {
+          setSelected(data.experiment);
+          requestAnimationFrame(() => {
+            const content = document.getElementById("workspace-content");
+            content?.scrollIntoView({ block: "start" });
+            content?.focus({ preventScroll: true });
+          });
+        }
       } else {
         setRecords(data.campaigns || data.experiments);
         setSelected(null);
@@ -68,10 +95,17 @@ export default function PrivateWorkspace() {
         setLoaded(true);
       }
     } catch (e) {
-      if (ticket === generation.current)
+      if (ticket === generation.current) {
         setError(e instanceof Error ? e.message : "Unable to load records");
+        requestAnimationFrame(() =>
+          document.getElementById("workspace-error")?.focus(),
+        );
+      }
     } finally {
-      if (ticket === generation.current) setBusy(false);
+      if (ticket === generation.current) {
+        setBusy(false);
+        setLoadingId(null);
+      }
     }
   }
   return (
@@ -109,6 +143,9 @@ export default function PrivateWorkspace() {
             autoComplete="off"
             minLength={32}
             maxLength={128}
+            pattern="(?:[A-Za-z0-9_]|-){32,128}"
+            title="Use 32 to 128 letters, numbers, underscores or hyphens."
+            aria-describedby="private-token-hint"
             required
           />
         </label>
@@ -149,73 +186,113 @@ export default function PrivateWorkspace() {
           </button>
         </div>
       </form>
-      <p className="muted small">
-        Anyone with this token controls its project records. Keep it private;
-        lost tokens cannot be recovered.
+      <p className="muted small" id="private-token-hint">
+        Use 32–128 letters, numbers, underscores or hyphens. Anyone with this
+        token controls its project records. Keep it private; lost tokens cannot
+        be recovered.
       </p>
       {error && (
-        <p className="trust-note" role="alert">
+        <p
+          className="trust-note"
+          id="workspace-error"
+          tabIndex={-1}
+          role="alert"
+        >
           {error}
         </p>
       )}
-      {selected ? (
-        <>
-          <button
-            className="text-link plain-button"
-            onClick={() => setSelected(null)}
-          >
-            ← {campaign ? "Campaign trail" : "Workspace results"}
-          </button>
-          <ExperimentDetail record={selected} />
-        </>
-      ) : campaign ? (
-        <>
-          <button
-            className="text-link plain-button"
-            onClick={() => setCampaign(null)}
-          >
-            ← Workspace results
-          </button>
-          <CampaignView
-            data={campaign}
-            onExperiment={(id) => void read(0, id, "experiments")}
-            onPage={(n) => void read(n, campaign.campaign.id, "campaigns")}
-          />
-        </>
-      ) : (
-        <>
-          {records.map((r) => (
+      <div id="workspace-content" tabIndex={-1}>
+        {selected ? (
+          <>
             <button
-              className="report-card workspace-result"
-              key={r.id}
-              onClick={() => void read(0, r.id)}
+              className="text-link plain-button"
+              onClick={() => {
+                setSelected(null);
+                requestAnimationFrame(() => {
+                  const main = document.querySelector("main");
+                  main?.scrollTo({
+                    top: campaign
+                      ? campaignScroll.current
+                      : resultsScroll.current,
+                  });
+                  const attr = campaign
+                    ? "data-experiment-id"
+                    : "data-workspace-id";
+                  if (previousRecord.current)
+                    main
+                      ?.querySelector<HTMLButtonElement>(
+                        `[${attr}="${CSS.escape(previousRecord.current)}"]`,
+                      )
+                      ?.focus({ preventScroll: true });
+                });
+              }}
             >
-              <span className="solved">
-                {r.status || "campaign"} · {r.visibility}
-              </span>
-              <h3>{r.title} ↗</h3>
-              <p>{r.question}</p>
+              ← {campaign ? "Campaign trail" : "Workspace results"}
             </button>
-          ))}
-          {loaded && !records.length && (
-            <div className="empty">
-              No matching records. Check your token or search terms.
-            </div>
-          )}
-          {loaded && (
-            <div className="pagination">
-              {offset > 0 && (
-                <button onClick={() => void read(Math.max(0, offset - 20))}>
-                  ← Previous
-                </button>
-              )}
-              {records.length === 20 && (
-                <button onClick={() => void read(offset + 20)}>Next →</button>
-              )}
-            </div>
-          )}
-        </>
-      )}
+            <ExperimentDetail record={selected} />
+          </>
+        ) : campaign ? (
+          <>
+            <button
+              className="text-link plain-button"
+              onClick={() => {
+                setCampaign(null);
+                requestAnimationFrame(() =>
+                  document
+                    .querySelector("main")
+                    ?.scrollTo({ top: resultsScroll.current }),
+                );
+              }}
+            >
+              ← Workspace results
+            </button>
+            <CampaignView
+              data={campaign}
+              loadingExperimentId={loadingId}
+              loadingPage={busy && loadingId === campaign.campaign.id}
+              onExperiment={(id) => void read(0, id, "experiments")}
+              onPage={(n) => void read(n, campaign.campaign.id, "campaigns")}
+            />
+          </>
+        ) : (
+          <>
+            {records.map((r) => (
+              <button
+                className="report-card workspace-result"
+                key={r.id}
+                data-workspace-id={r.id}
+                disabled={busy}
+                onClick={() => void read(0, r.id)}
+              >
+                <span className="solved">
+                  {r.status || "campaign"} · {r.visibility}
+                </span>
+                <h3>
+                  {loadingId === r.id ? `Loading ${r.title}…` : `${r.title} ↗`}
+                </h3>
+                <p>{r.question}</p>
+              </button>
+            ))}
+            {loaded && !records.length && (
+              <div className="empty">
+                No matching records. Check your token or search terms.
+              </div>
+            )}
+            {loaded && (
+              <div className="pagination">
+                {offset > 0 && (
+                  <button onClick={() => void read(Math.max(0, offset - 20))}>
+                    ← Previous
+                  </button>
+                )}
+                {records.length === 20 && (
+                  <button onClick={() => void read(offset + 20)}>Next →</button>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
       <p className="muted">
         <Link href="/connect">Connect your agent</Link> to create campaigns and
         submit reproduction reports.

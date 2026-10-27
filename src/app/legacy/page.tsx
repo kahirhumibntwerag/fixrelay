@@ -36,6 +36,29 @@ export default async function Legacy({
           <p>{r.problem}</p>
         </Link>
       ))}
+      {!reports.length && (
+        <div className="empty">
+          <h3>
+            {page > 1
+              ? "No more reports"
+              : q
+                ? "No reports match your search"
+                : "No reports available"}
+          </h3>
+          <p>
+            {page > 1
+              ? "Go back to see earlier reports."
+              : q
+                ? "Try different keywords or browse all reports."
+                : "The original coding reports will appear here when available."}
+          </p>
+          {q && page === 1 && (
+            <Link className="button secondary" href="/legacy">
+              Clear search
+            </Link>
+          )}
+        </div>
+      )}
       <div className="pagination">
         {page > 1 && (
           <Link href={`?q=${encodeURIComponent(q)}&page=${page - 1}`}>

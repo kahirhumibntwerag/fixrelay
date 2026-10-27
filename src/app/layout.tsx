@@ -1,4 +1,4 @@
-import { SiteNavigation } from "@/components/site-navigation";
+import { SiteBreadcrumb, SiteNavigation } from "@/components/site-navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowUpRight, Braces, Radio } from "lucide-react";
@@ -12,6 +12,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
+        <a className="skip-link" href="#main-content">
+          Skip to main content
+        </a>
         <div className="shell">
           <aside className="sidebar">
             <Link className="brand" href="/">
@@ -43,11 +46,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           </aside>
-          <main>
+          <main id="main-content" tabIndex={-1}>
             <header>
-              <div className="breadcrumb">
-                Research <span>/</span> Campaigns & experiments
-              </div>
+              <SiteBreadcrumb />
               <Link href="/connect" className="header-link">
                 <span className="status-dot" />
                 MCP endpoint <ArrowUpRight size={14} />

@@ -42,19 +42,28 @@ export function CampaignView({
   data,
   onExperiment,
   onPage,
+  evidenceAccess,
+  loadingExperimentId,
+  loadingPage = false,
 }: {
   data: CampaignViewData;
   onExperiment?: (id: string) => void;
   onPage?: (offset: number) => void;
+  evidenceAccess?: React.ReactNode;
+  loadingExperimentId?: string | null;
+  loadingPage?: boolean;
 }) {
   const c = data.campaign;
   const nodeLink = (id: string, title: string) =>
     onExperiment ? (
       <button
         className="text-link plain-button"
+        data-experiment-id={id}
+        disabled={Boolean(loadingExperimentId)}
+        aria-busy={loadingExperimentId === id}
         onClick={() => onExperiment(id)}
       >
-        {title} ↗
+        {loadingExperimentId === id ? `Loading ${title}…` : `${title} ↗`}
       </button>
     ) : (
       <Link className="text-link" href={`/experiments/${id}`}>
@@ -70,11 +79,14 @@ export function CampaignView({
       <h1>{c.title}</h1>
       <p className="intro">{c.question}</p>
       <div className="prompt-box">{c.summary}</div>
+      {evidenceAccess}
       <section className="reproduction-section">
         <h2>Campaign reproduction</h2>
         <CampaignEvidenceSummary evidence={c.reproduction} detail />
       </section>
-      <h2 className="section-heading">Experiments in this campaign</h2>
+      <h2 className="section-heading" id="campaign-experiments">
+        Experiments in this campaign
+      </h2>
       <p className="muted small">
         Follow the investigation from parent experiments to their follow-ups.
         Each step shows its original outcome and its reproduction evidence
@@ -125,8 +137,10 @@ export function CampaignView({
       )}
       {(data.next_offset !== null || (onPage && (data.offset || 0) > 0)) && (
         <div className="pagination">
+          {loadingPage && <span role="status">Loading experiments…</span>}
           {onPage && (data.offset || 0) > 0 && (
             <button
+              disabled={loadingPage}
               onClick={() => onPage(Math.max(0, (data.offset || 0) - 10))}
             >
               ← Previous experiments
@@ -134,7 +148,10 @@ export function CampaignView({
           )}
           {data.next_offset !== null &&
             (onPage ? (
-              <button onClick={() => onPage(data.next_offset!)}>
+              <button
+                disabled={loadingPage}
+                onClick={() => onPage(data.next_offset!)}
+              >
                 Next experiments →
               </button>
             ) : (

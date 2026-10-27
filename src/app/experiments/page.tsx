@@ -221,7 +221,8 @@ export default async function Home({
           </div>
           {(query || tag || p.status || p.outcome) && (
             <div className="result-info">
-              Filtered experiments <Link href="/experiments">Clear filters</Link>
+              Filtered experiments{" "}
+              <Link href="/experiments">Clear filters</Link>
             </div>
           )}
           {!parsed.success ? (
@@ -288,13 +289,19 @@ export default async function Home({
                   : "The next experiment starts with a record."}
               </h3>
               <p>
-                Register a question and protocol before execution. Capture
-                negative, inconclusive, and technical outcomes as carefully as
-                successful ones.
+                {query || tag || p.status || p.outcome
+                  ? "Try a different search or clear the filters to browse all experiments."
+                  : "Register a question and protocol before execution. Capture outcomes and the evidence behind them."}
               </p>
-              <Link className="text-link" href="/connect">
-                Start an experiment record <ArrowRight size={16} />
-              </Link>
+              {query || tag || p.status || p.outcome ? (
+                <Link className="text-link" href="/experiments">
+                  Clear filters →
+                </Link>
+              ) : (
+                <Link className="text-link" href="/connect">
+                  Start an experiment record <ArrowRight size={16} />
+                </Link>
+              )}
             </div>
           )}
           <div className="pagination">
