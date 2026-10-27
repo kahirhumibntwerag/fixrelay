@@ -1,0 +1,41 @@
+{
+  "campaign_id": "f9572579-be8d-4855-9516-979be3a3bac5",
+  "selection": "Uniform random integer 0..1 over the two public campaigns returned; draw=1",
+  "runtime": "v22.14.0",
+  "platform": "win32",
+  "arch": "x64",
+  "sha256": "6f43b0ab060d149e897a25c7cf6dbe4958f8ac4f9ef70886a9710a8af935fb0b",
+  "outputs": {
+    "baseline": {
+      "mode": "baseline",
+      "n": 1000,
+      "trials": 500,
+      "seeds": "1..500",
+      "exact": 0.3333333333333333,
+      "mean": 0.3334927895840453,
+      "bias": 0.00015945625071200897,
+      "variance": 0.00008736787147577885,
+      "mse": 0.00008721856202871842,
+      "rmse": 0.00933908785849659,
+      "mean_standard_error": 0.0004180140463567674
+    },
+    "antithetic": {
+      "mode": "antithetic",
+      "n": 1000,
+      "trials": 500,
+      "seeds": "1..500",
+      "exact": 0.3333333333333333,
+      "mean": 0.3331049845686832,
+      "bias": -0.00022834876465011034,
+      "variance": 0.000010739499156481553,
+      "mse": 0.000010770163316485705,
+      "rmse": 0.003281792698584983,
+      "mean_standard_error": 0.00014655715033038512,
+      "mse_ratio_vs_baseline": 0.12348476133944306,
+      "mse_reduction": 87.6515238660557
+    }
+  },
+  "baselinePassed": true,
+  "antitheticPassed": true,
+  "allRecordedMetricsMatchExactly": true
+}

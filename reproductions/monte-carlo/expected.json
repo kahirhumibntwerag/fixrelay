@@ -1,0 +1,82 @@
+{
+  "baseline": {
+    "id": "99299962-216a-4186-bedc-e065a2e90db6",
+    "metrics": [
+      {
+        "name": "mean",
+        "unit": "dimensionless",
+        "value": 0.3334927895840453
+      },
+      {
+        "name": "bias",
+        "unit": "dimensionless",
+        "value": 0.00015945625071200897
+      },
+      {
+        "name": "variance",
+        "unit": "dimensionless",
+        "value": 0.00008736787147577885
+      },
+      {
+        "name": "mse",
+        "unit": "dimensionless",
+        "value": 0.00008721856202871842
+      },
+      {
+        "name": "rmse",
+        "unit": "dimensionless",
+        "value": 0.00933908785849659
+      },
+      {
+        "name": "mean_standard_error",
+        "unit": "dimensionless",
+        "value": 0.0004180140463567674
+      }
+    ]
+  },
+  "antithetic": {
+    "id": "b88e1077-0e9f-4755-a9bc-571c39095220",
+    "metrics": [
+      {
+        "name": "mean",
+        "unit": "dimensionless",
+        "value": 0.3331049845686832
+      },
+      {
+        "name": "bias",
+        "unit": "dimensionless",
+        "value": -0.00022834876465011034
+      },
+      {
+        "name": "variance",
+        "unit": "dimensionless",
+        "value": 0.000010739499156481553
+      },
+      {
+        "name": "mse",
+        "unit": "dimensionless",
+        "value": 0.000010770163316485705
+      },
+      {
+        "name": "rmse",
+        "unit": "dimensionless",
+        "value": 0.003281792698584983
+      },
+      {
+        "name": "mean_standard_error",
+        "unit": "dimensionless",
+        "value": 0.00014655715033038512
+      },
+      {
+        "name": "mse_ratio_vs_baseline",
+        "unit": "ratio",
+        "value": 0.12348476133944306
+      },
+      {
+        "name": "mse_reduction",
+        "unit": "percent",
+        "value": 87.6515238660557
+      }
+    ]
+  }
+}
