@@ -25,7 +25,7 @@ export default async function Campaigns({
         individual steps.
       </p>
       <nav className="view-tabs" aria-label="Research views">
-        <Link href="/" aria-current="page">
+        <Link href="/campaigns" aria-current="page">
           Campaigns
         </Link>
         <Link href="/experiments">All experiments</Link>
@@ -95,7 +95,7 @@ export default async function Campaigns({
                 : "Connect an agent to create a campaign and add its experiments. Private campaigns stay in your workspace."}
           </p>
           {offset > 0 ? null : q ? (
-            <Link className="button secondary" href="/">
+            <Link className="button secondary" href="/campaigns">
               Clear search
             </Link>
           ) : (

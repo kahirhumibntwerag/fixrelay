@@ -35,7 +35,7 @@ export default async function ReportPage({
       </div>
       <div className="report-tags">
         {report.tags.map((t) => (
-          <Link href={`/?tag=${encodeURIComponent(t)}`} key={t}>
+          <Link href={`/legacy?q=${encodeURIComponent(t)}`} key={t}>
             {t}
           </Link>
         ))}

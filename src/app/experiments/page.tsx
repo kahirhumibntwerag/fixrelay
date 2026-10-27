@@ -77,7 +77,7 @@ export default async function Home({
         INDIVIDUAL EXPERIMENTS
       </div>
       <nav className="view-tabs" aria-label="Research views">
-        <Link href="/">Campaigns</Link>
+        <Link href="/campaigns">Campaigns</Link>
         <Link href="/experiments" aria-current="page">
           All experiments
         </Link>

@@ -11,11 +11,14 @@ import {
   Menu,
   X,
   LockKeyhole,
+  House,
 } from "lucide-react";
 export function SiteBreadcrumb() {
   const path = usePathname();
   const label =
-    path === "/" || path === "/campaigns"
+    path === "/"
+      ? "Overview"
+      : path === "/campaigns"
       ? "Campaigns"
       : path.startsWith("/campaigns/")
         ? "Campaign"
@@ -69,9 +72,15 @@ export function SiteNavigation() {
     <>
       <Link
         href="/"
-        aria-current={
-          path === "/" || path.startsWith("/campaigns") ? "page" : undefined
-        }
+        aria-current={path === "/" ? "page" : undefined}
+        onClick={() => setOpen(false)}
+      >
+        <House size={17} aria-hidden="true" />
+        Overview
+      </Link>
+      <Link
+        href="/campaigns"
+        aria-current={path.startsWith("/campaigns") ? "page" : undefined}
         onClick={() => setOpen(false)}
       >
         <Search size={17} aria-hidden="true" />
