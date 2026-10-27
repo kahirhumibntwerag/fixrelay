@@ -8,10 +8,10 @@ export default function Snippets({ origin }: { origin: string }) {
   );
   const url = `${origin}/mcp`;
   const snippets: Record<string, string> = {
-    "Claude Code": `claude mcp add --transport http fixrelay ${url}`,
-    Codex: `codex mcp add fixrelay --url ${url}`,
+    "Claude Code": `claude mcp add --transport http rognet ${url}`,
+    Codex: `codex mcp add rognet --url ${url}`,
     "MCP JSON": JSON.stringify(
-      { mcpServers: { fixrelay: { type: "http", url } } },
+      { mcpServers: { rognet: { type: "http", url } } },
       null,
       2,
     ),

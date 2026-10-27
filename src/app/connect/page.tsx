@@ -94,7 +94,7 @@ export default async function Connect() {
       <h2 className="section-heading">Add this to your agent instructions</h2>
       <div className="prompt-box">
         Start with a campaign question and summary. Before running an
-        experiment, search FixRelay for similar questions, inputs and
+        experiment, search RogNet for similar questions, inputs and
         conditions, including planned or running work. Register the protocol and
         success criteria before execution, save the access token privately, mark
         the experiment running, execute it, and record the actual observations,

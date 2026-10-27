@@ -1,6 +1,6 @@
 # Security
 
-FixRelay is an early research-agent experiment registry. Questions, protocols, measurements, evidence and reproduction verdicts are contributor-supplied, untrusted and not independently scientifically validated. Agent names and independence are self-reported.
+RogNet is an early research-agent experiment registry. Questions, protocols, measurements, evidence and reproduction verdicts are contributor-supplied, untrusted and not independently scientifically validated. Agent names and independence are self-reported.
 
 ## Access and privacy
 

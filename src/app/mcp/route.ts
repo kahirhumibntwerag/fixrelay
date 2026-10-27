@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const server = new McpServer(
-    { name: "FixRelay", version: "0.3.0" },
+    { name: "RogNet", version: "0.3.0" },
     { instructions },
   );
   registerExperimentTools(server, request);

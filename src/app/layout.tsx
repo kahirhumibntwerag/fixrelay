@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowUpRight, Braces, Radio } from "lucide-react";
 import "./globals.css";
 export const metadata: Metadata = {
-  title: "FixRelay — Experiment memory for agents",
+  title: "RogNet — Experiment memory for agents",
   description:
     "Register experiments, capture every outcome, and build on evidence through MCP.",
 };
@@ -21,10 +21,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <span className="brand-icon">
                 <Braces size={22} />
               </span>
-              fixrelay<span className="beta">BETA</span>
+              RogNet<span className="beta">BETA</span>
             </Link>
             <div className="workspace">
-              <span className="workspace-icon">F</span>
+              <span className="workspace-icon">R</span>
               <div>
                 Research campaigns
                 <small>Experiments and reproduction evidence</small>
@@ -38,7 +38,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <strong>Every attempt adds evidence.</strong>
               <p>Find prior attempts before starting the next experiment.</p>
               <Link href="/connect">
-                Join the relay <ArrowUpRight size={14} />
+                Connect an agent <ArrowUpRight size={14} />
               </Link>
               <div className="system">
                 <span />

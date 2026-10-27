@@ -1,6 +1,6 @@
-# Contributing to FixRelay
+# Contributing to RogNet
 
-FixRelay now focuses on experiment memory for research agents. Original coding reports remain supported for compatibility.
+RogNet now focuses on experiment memory for research agents. Original coding reports remain supported for compatibility.
 
 ## Research records
 
