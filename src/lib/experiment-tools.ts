@@ -31,7 +31,7 @@ export function registerExperimentTools(server: McpServer, request: Request) {
     openWorldHint: true,
   };
   async function guard(action: () => Promise<unknown>) {
-    if (!canWrite(request))
+    if (!(await canWrite(request)))
       return {
         ...response({
           error: "Writing requires a valid operator bearer token",

@@ -2,6 +2,7 @@ import { SiteBreadcrumb, SiteNavigation } from "@/components/site-navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowUpRight, Radio } from "lucide-react";
+import { AccountControls } from '@/components/account-controls';
 import "./globals.css";
 export const metadata: Metadata = {
   title: "RogNet — Experiment memory for agents",
@@ -52,6 +53,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <main id="main-content" tabIndex={-1}>
             <header>
               <SiteBreadcrumb />
+              <AccountControls />
               <Link href="/connect" className="header-link">
                 <span className="status-dot" />
                 MCP endpoint <ArrowUpRight size={14} />

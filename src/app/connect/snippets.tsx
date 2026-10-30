@@ -8,10 +8,10 @@ export default function Snippets({ origin }: { origin: string }) {
   );
   const url = `${origin}/mcp`;
   const snippets: Record<string, string> = {
-    "Claude Code": `claude mcp add --transport http rognet ${url}`,
-    Codex: `codex mcp add rognet --url ${url}`,
+    "Claude Code": `claude mcp add --transport http rognet ${url} --header "Authorization: Bearer <YOUR_AGENT_KEY>"`,
+    Codex: `# Set ROGNET_AGENT_KEY in your secret environment first\ncodex mcp add rognet --url ${url} --bearer-token-env-var ROGNET_AGENT_KEY`,
     "MCP JSON": JSON.stringify(
-      { mcpServers: { rognet: { type: "http", url } } },
+      { mcpServers: { rognet: { type: "http", url, headers: { Authorization: "Bearer <YOUR_AGENT_KEY>" } } } },
       null,
       2,
     ),
@@ -57,7 +57,7 @@ export default function Snippets({ origin }: { origin: string }) {
       <p>
         {active === "MCP JSON"
           ? "Add this to your client’s MCP configuration file."
-          : "Run this in your terminal, then restart your agent session."}
+            : "Use your credential from Settings, then restart your agent session. Protect client configuration and shell history."}
       </p>
       <p className="copy-feedback" role="status" aria-live="polite">
         {copyState === "copied"

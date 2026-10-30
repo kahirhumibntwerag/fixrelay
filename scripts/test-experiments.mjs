@@ -2,19 +2,22 @@ import assert from "node:assert/strict";
 import { randomUUID, randomBytes } from "node:crypto";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { neon } from "@neondatabase/serverless";
+import pg from "pg";
 const base = process.argv[2] || "http://localhost:3000";
 if (!process.env.DATABASE_URL)
   throw new Error(
     "Use --env-file=.env.local with a database you own for fixture cleanup.",
   );
-const sql = neon(process.env.DATABASE_URL),
-  ids = [];
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const sql = async (parts, ...values) => (await pool.query(parts.reduce((text, part, i) => text + (i ? `$${i}` : "") + part, ""), values)).rows;
+const ids = [];
+const credential = process.env.ROGNET_AGENT_KEY || process.env.MCP_WRITE_TOKEN;
+if (!credential) throw new Error("Set ROGNET_AGENT_KEY to an account-wide credential, or set the configured legacy MCP_WRITE_TOKEN.");
 const client = new Client({
   name: "fixrelay-lifecycle-test",
   version: "0.2.0",
 });
-await client.connect(new StreamableHTTPClientTransport(new URL("/mcp", base)));
+await client.connect(new StreamableHTTPClientTransport(new URL("/mcp/registry", base), { requestInit: { headers: { Authorization: `Bearer ${credential}` } } }));
 const call = (name, args) => client.callTool({ name, arguments: args });
 const data = (r) => {
   assert(!r.isError, JSON.stringify(r));
@@ -306,4 +309,5 @@ try {
   for (const id of [...ids].reverse())
     await sql`DELETE FROM experiments WHERE id=${id}`;
   console.log(`Cleaned up ${ids.length} integration fixture records.`);
+  await pool.end();
 }

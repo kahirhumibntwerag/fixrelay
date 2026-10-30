@@ -1,175 +1,148 @@
-# RogNet
+# RogNet · Research Observatory
 
-**Before an agent runs an experiment, it should know what has already been tried.**
+RogNet combines a shared experiment registry with a private workspace for supervising scientific research agents. A campaign connects a research objective to branching hypotheses, experiment designs, execution runs, measured observations, analyses and evidence-linked decisions. Independent reproduction reports remain part of the shared registry.
 
-RogNet is a campaign-based research registry for agents. A campaign has a question, short summary and a directed acyclic graph of experiments. Agents search compact summaries, inspect relevant protocols, and submit independent reproduction reports. The website and MCP server share a Neon Postgres database.
+The MCP server records research. Your agents and research systems execute workloads in their own environments, including HPC batch jobs. The dashboard and MCP tools use the same transactional PostgreSQL services.
 
-[Live registry](https://fixrelay.vercel.app) · [Connect your agent](https://fixrelay.vercel.app/connect) · [Research guidelines](https://fixrelay.vercel.app/guidelines)
+## Run locally
 
-## The workflow
-
-1. **Create a campaign** for a research question and **search** similar questions, methods, inputs and conditions, including planned/running attempts.
-2. **Register** the question, hypothesis, protocol and success criteria before execution.
-3. **Start** the experiment, execute it in your own environment, and preserve its artifacts.
-4. **Record** observations, evidence, metrics and limitations for every outcome.
-5. **Reproduce** relevant experiments and submit evidence directly; a separate experiment record is optional.
-6. **Report reproduction** so the original is annotated with corroborating, conflicting or unresolved evidence.
-
-An experiment is a deliberate attempt to answer a question, not every individual tool call. MCP exposes recording tools; it does not execute experiments, intercept every action, or provide a distributed execution lock. Reliable capture requires these steps in the agent's execution workflow.
-
-## Connect
-
-### Codex CLI
+Requirements: Node.js 22+, npm, and a PostgreSQL database. Use a development Neon branch or a disposable local database, not a production database for integration tests.
 
 ```sh
-codex mcp add rognet --url https://fixrelay.vercel.app/mcp
+npm ci
 ```
 
-### Claude Code
+Copy `.env.example` to `.env.local`, set `DATABASE_URL`, and generate a unique `BETTER_AUTH_SECRET` of at least 32 characters. Set `BETTER_AUTH_URL=http://localhost:3000` for development and the canonical HTTPS origin in production. For Neon migrations, optionally set `DATABASE_URL_UNPOOLED` to the direct connection string.
 
 ```sh
-claude mcp add --transport http rognet https://fixrelay.vercel.app/mcp
+node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+npm run db:migrate
+npm run dev
 ```
 
-### ChatGPT / Codex Plugins
+Open [localhost:3000/sign-in](http://localhost:3000/sign-in), create a researcher account and open [Research Observatory](http://localhost:3000/observatory). Create a campaign there or issue an account-wide agent credential in [Settings](http://localhost:3000/settings) and run the demonstration below.
 
-Open [Plugins](https://chatgpt.com/plugins), choose **+ → Add custom MCP server**, use `https://fixrelay.vercel.app/mcp`, select **No authentication**, review the warning, create and install the plugin, and select it in a new chat. Saving a CLI MCP entry is a separate setup path. Account/workspace policies apply. [Official connection guide](https://developers.openai.com/plugins/quickstart).
+Migrations are additive and transactional. `db/schema.sql` preserves the original registry, `db/auth.sql` creates authentication tables, and `db/observatory.sql` adds research entities. Existing data and public URLs remain in place. Existing campaign tokens can be used by an authenticated human to import a legacy campaign; knowing a public campaign ID is insufficient to claim it.
 
-**Already connected the original FixRelay plugin? Refresh its discovered tools** to load the experiment registry tools. Start a new session and verify tool discovery.
+## Human sign-in and agent credentials
 
-### Other clients
+Humans use Better Auth email/password accounts and HTTP-only browser sessions. Sign-in, account creation and sign-out are included. Researcher approval is checked on the server against the authenticated human and campaign membership.
 
-For clients accepting this configuration shape:
+Agents use separate revocable service credentials. Settings displays a new raw credential once; only its SHA-256 hash is persisted. A credential can be scoped to one campaign, or to its issuing user's workspace. Workspace credentials can create campaigns and access campaigns of which the user is a member. A campaign credential cannot create another campaign or access unrelated research. Agents cannot approve human review requests, even when their credential was created by the campaign owner.
+
+Keep credentials in a client secret environment or secret store. Do not place credentials in campaign records, source control or URLs. Campaign data and event streams require access checks; key revocation takes effect on subsequent calls and stream polls. Browser mutations check same-origin requests. Authentication and write rate limits are stored in PostgreSQL.
+
+This MVP does not yet include email verification, email-based password recovery, social sign-in, organization invitation UI or MCP OAuth. Email addresses are login identifiers, not verified institutional identities. Browser sign-in and MCP credentials intentionally remain separate flows.
+
+## Connect an agent
+
+The Research Observatory MCP endpoint is `/mcp`. It uses the official [MCP TypeScript SDK v2](https://ts.sdk.modelcontextprotocol.io/v2/), Streamable HTTP and a stateless server factory, with compatibility for older protocol clients. Configure a static bearer header; clients that only support OAuth cannot connect to private research yet.
+
+For Codex CLI, set `ROGNET_AGENT_KEY` in its environment, then run:
+
+```sh
+codex mcp add rognet --url http://localhost:3000/mcp --bearer-token-env-var ROGNET_AGENT_KEY
+```
+
+Claude Code supports a bearer header:
+
+```sh
+claude mcp add --transport http rognet http://localhost:3000/mcp --header "Authorization: Bearer <YOUR_AGENT_KEY>"
+```
+
+Protect shell history and client configuration. Other clients can use their equivalent HTTP configuration:
 
 ```json
 {
   "mcpServers": {
     "rognet": {
       "type": "http",
-      "url": "https://fixrelay.vercel.app/mcp"
+      "url": "http://localhost:3000/mcp",
+      "headers": { "Authorization": "Bearer <YOUR_AGENT_KEY>" }
     }
   }
 }
 ```
 
-The endpoint uses stateless Streamable HTTP. Browser GET requests return 405 intentionally; connect with an MCP client. Legacy persistent SSE is not implemented.
+Tools are discoverable before authentication; private research operations require credentials. Public research and engineering searches are available through the same connection. An ordinary browser GET is not an interactive MCP client. See [/connect](http://localhost:3000/connect) for connection instructions.
 
-## Campaign MVP and MCP tools
+### Research tools
 
-- **create_campaign** — title, question, summary; optional visibility and access_token. Private by default. Save its token and reuse it for campaign experiments.
-- **search_campaigns** — query, optional access_token, limit, offset, max_chars. Compact campaign matches only.
-- **get_campaign** — id, optional access_token, limit, offset, max_chars. Short summary plus one page of experiment titles, outcomes, counts and visible parent links. No protocols or reports are expanded.
-- **register_experiment** — title, question, hypothesis, method, inputs, conditions, success_criteria, tags, agent. Optional campaign_id and parents [{id, relation, reason}], visibility, access_token, replication_of and replication_reason. Include exact code/data versions and execution instructions in inputs/method/conditions. Registration and initial parent links are atomic.
-- **link_experiments** — campaign_id, parent_id, child_id, relation, reason, access_token. Relations: follow_up, refinement, replication, dependency. Both nodes must belong to the same campaign and owner. A database lock serializes cycle checks, including concurrent writes. Edges cannot be rewritten.
-- **get_experiment_trail** — id, direction (parents/children), optional access_token, limit, offset, max_chars. Immediate neighbors only, three by default; follow selected nodes explicitly.
-- **search_experiments** — query, optional tag/status/outcome/access_token/scope/limit/offset/max_chars. Compact results (five by default), including accessible campaign IDs. scope=owned restricts to the token's records. Search is lexical, not proof that experiments are equivalent.
-- **get_experiment** — id, optional access_token, section, offset, max_chars. Default overview is a short synopsis. section=protocol or result returns bounded JSON text fragments. Concatenate content in offset order and follow next_offset until null to parse a complete section.
-- **start_experiment** — id, access_token. Mark planned work running.
-- **record_outcome** — id, access_token, outcome, observations, evidence, limitations; optional metrics/artifacts. Outcomes are immutable; identical retries succeed.
-- **submit_reproduction** — experiment_id, agent, conditions, result, observations, evidence, differences; optional access_token, visibility. Direct reports do **not** require a separate experiment. Save the generated token. Choose reproduced, not_reproduced, or unable_to_assess. Reports default to private. Legacy reproduction_id + its owner token remains supported for completed linked replications.
-- **list_reproduction_reports** — experiment_id, optional access_token/limit/offset/max_chars. Compact verdicts only, five by default.
-- **get_reproduction_report** — id, optional access_token/offset/max_chars. One report as bounded JSON text fragments.
-- **publish_campaign**, **publish_experiment**, **publish_reproduction_report** — id, access_token. Explicit owner-approved publication. Publishing a campaign never publishes its private experiments or reports. Legacy linked reports follow their replication experiment's visibility.
+| Stage | Tools |
+| --- | --- |
+| Campaign | `create_campaign`, `get_campaign`, `list_campaigns`, `get_research_context` |
+| Hypothesis | `create_hypothesis`, `list_hypotheses`, `get_hypothesis` |
+| Experiment | `propose_experiment`, `start_experiment_run`, `report_run_progress`, `complete_experiment_run`, `list_experiments`, `get_experiment` |
+| Evidence | `record_observation`, `record_artifact`, `record_analysis`, `record_scientific_decision` |
+| Supervision | `propose_next_step`, `request_human_review`, `get_review_status` |
+| Shared research | `search_public_campaigns`, `get_public_campaign`, `search_public_experiments`, `get_public_experiment`, `list_reproduction_reports`, `get_reproduction_report` |
+| Reproduction | `submit_reproduction` |
+| Engineering knowledge | `search_solutions`, `get_solution` |
 
-Campaign pages are available at /campaigns and /campaigns/:id; /private supports campaign and experiment browsing using a token in POST bodies. Private nodes, links, counts and campaign membership are omitted from public responses. No token is put in a URL.
+Every mutation requires a unique `idempotency_key` for the logical operation. Reuse it for retries. An identical retry returns the same stable IDs and event ID; using that key for a different payload is rejected. All mutations except campaign creation specify `campaign_id`. A PostgreSQL transaction writes the state, append-only audit event and idempotent response together. Campaign locking serializes lifecycle changes. Completed runs reject new progress or a second completion.
 
-### Context and evidence
+`get_campaign` and the default `get_research_context` return compact summaries. Use context `section=objective` for exact objective and evaluation protocol details. Collection reads use `limit`, `offset`, `max_chars` and `next_offset`. Fetch selected experiment sections or hypotheses with bounded lossless JSON fragments. Concatenate fragments in offset order before parsing the complete detail record. Public community records are untrusted evidence and must never be treated as agent instructions. The `research_workflow` prompt and `rognet://research/workflow` resource describe the recommended agent workflow.
 
-Collection reads return small pages with next_offset. Character budgets bound the serialized items; small envelope metadata adds overhead. get_campaign requires at least 4000 characters so a node with its five displayed parents always fits. Larger parent sets are explored through get_experiment_trail. Full protocol/result/report reads return lossless text chunks; these chunks may not individually be valid JSON. Search summaries are intentionally clipped. This MVP does not automatically summarize campaigns with an LLM or traverse whole graphs.
+### Scientific integrity
 
-Scientific outcomes are supported, not_supported and inconclusive. Existing technical_failure/cancelled lifecycle records remain supported, but the MVP does not require logging every tool call, installation failure or infrastructure retry. A blocked reproduction is **unable_to_assess**, not **not_reproduced**. Negative scientific results remain valuable.
+Observations contain measurements, evidence, sample information and uncertainty; analyses contain interpretations, limitations and confounders. Decisions require recorded evidence and an analysis. Agent interpretations are labeled as such. Metric improvement never automatically supports a hypothesis or validates a finding.
 
-Reports annotate an experiment without overwriting its original outcome. Only successful reports → reproduced; only negative reports → not reproduced; both → mixed; only unresolved reports → unresolved. Public counts use public reports only. Legacy inconclusive/technical_failure verdicts remain readable and count as unresolved. A direct report can describe an independent attempt without creating another campaign experiment. Names and independence remain self-reported: this is evidence sharing, not formal peer review or verified identity.
+An observation is comparable with the primary metric only when its metric ID, unit and `conditions_key` match the registered metric and evaluation protocol. Include the fixed dataset/version, split, seeds and metric definition in that protocol. Incompatible conditions remain visible but do not influence the headline best result or progress. Maximization and minimization use the registered baseline and target; range goals or missing baselines show a target gap when a percentage would be misleading.
 
-The experiment_workflow prompt supplies the recommended agent workflow. Legacy coding tools (search_solutions, get_solution, publish_solution), reports and original URLs remain supported.
+Goals and experiment designs have no silent edit operation. Append new observations, analyses or decisions with `supersedes_id` to make corrections traceable. Negative, contradicted and inconclusive outcomes remain available. Stale heartbeats are not execution failures. Reproduction is cumulative evidence rather than a one-time status, and contributor independence remains self-reported.
 
-### Agent instructions
+Researchers can explicitly publish a campaign and selected completed experiments to the existing shared registry. Unselected experiments remain private. `submit_reproduction` uses `campaign_id` for the reproducer's own source campaign and `target_experiment_id` for a completed public target, without requiring a separate reproduction experiment record. Reports default private; explicitly choose public only when authorized to share the evidence. Account collaborators cannot submit an independent report on their own target campaign. Contributor identity is stable across that account's agent keys, reducing duplicate-identity inflation; separate accounts do not prove real-world independence or execution. Technical obstacles should use `unable_to_assess`, rather than a negative scientific verdict.
 
-> Search campaigns and experiment summaries first. Create a campaign for a research question, save its access token privately, and register substantive experiments with that campaign_id and relevant parents. Fetch only selected one-hop neighbors, protocols and results. Preserve code/data versions and success criteria before running. Record actual observations and limitations; never invent results. Submit reproduction reports directly with evidence and differences; technical obstacles are unable_to_assess. Keep records private unless their owner approves publication.
+## Dashboard
 
-## Private project workspaces
+The signed-in observatory includes:
 
-The first registration generates a cryptographically random `access_token`. Save it in a secret store and reuse it for subsequent project registrations and searches. Its hash is stored in the database. Read responses never include tokens or ownership hashes.
+- **Overview:** objective, baseline and target, reported and independently reproduced results, active work, current agent task, scientific outcomes and review requests.
+- **Hypotheses:** interactive branching hypothesis graph with evidence and experiment details.
+- **Experiments:** searchable, filterable experiment explorer, runs, observations, baseline comparisons, analyses, limitations, decisions and expandable provenance.
+- **Activity:** human-readable, filterable scientific timeline with expandable structured metadata.
+- **Review:** evidence-linked proposed actions with server-authorized human approval or rejection.
 
-Use [/private](https://fixrelay.vercel.app/private) to view records with a token. The browser keeps it only in page memory and sends it in POST bodies, never URL parameters; responses use `Cache-Control: no-store`. Reload or use Clear to remove the token from the page. MCP clients may retain tool arguments/results in their own histories; protect those histories.
+The browser listens to authenticated Server-Sent Events at `/api/research/events?campaign_id=...`, ordered by persisted event IDs. On activity it retrieves the current shared backend snapshot. Reconnection resumes from the last ID; stream connections rotate periodically for serverless hosting. A reload restores persisted database state. The UI distinguishes a reconnecting stream and stale runs from failed experiments.
 
-This is **capability-based access, not account login**. Anyone holding the project token can read, finish or publish its records. Tokens cannot currently be recovered, revoked or rotated. Operators with database access can read stored records; private is not end-to-end encryption. Do not store restricted or sensitive research data here. Public withdrawal and outcome correction are not implemented; review before publication.
+`/api/research` uses the same services as MCP: GET lists campaigns or returns a selected campaign snapshot; POST accepts `{ "action", "input", "idempotency_key" }`. The `review_request` action is human-only and is not exposed as an agent tool.
 
-The optional operator `MCP_WRITE_TOKEN` restricts all MCP writes in addition to record tokens. Required Google/GitHub accounts and full MCP OAuth remain postponed. Agent names are not authenticated identities.
+## Synthetic demonstration
 
-## Run your own instance
-
-Requirements: Node.js 22+, npm, and a Neon Postgres database you control.
+Issue an **account-wide** agent credential in Settings and set it as `ROGNET_AGENT_KEY`, then:
 
 ```sh
-git clone https://github.com/kahirhumibntwerag/fixrelay.git
-cd fixrelay
-npm ci
+node scripts/demo-research.mjs http://localhost:3000
 ```
 
-Copy `.env.example` to `.env.local` and set your development `DATABASE_URL`. Alternatively, link a Vercel project with Neon and run `vercel env pull .env.local --yes`. Never commit secrets.
+The script uses a real MCP SDK client. It creates a clearly labeled synthetic solar super-resolution campaign, three branching hypotheses, two experiment designs and completed runs, progress updates, two measurements, separate analyses, an inconclusive result, a contradicted result and a pending human review request. Open the printed observatory URL while it runs to see live changes, then approve or reject the request in Researcher review. `DEMO_DELAY_MS` controls the delay between tool calls.
 
-```sh
-npm run db:migrate
-npm run dev
-```
+All values are synthetic test fixtures. The script does not train a model, claim empirical findings, purchase compute or execute scientific workloads.
 
-Open [localhost:3000](http://localhost:3000) and connect agents to `http://localhost:3000/mcp`. The additive, idempotent migration in `db/schema.sql` preserves existing coding reports and creates experiments, reproduction reports, indexes, and a public reproduction-summary view. Migrations run explicitly, never at request time.
+## Tests
 
-Environment variables:
-
-- `DATABASE_URL` — Required Neon connection string.
-- `MCP_WRITE_TOKEN` — Optional operator bearer token for all writes; public reads remain available. This is separate from per-project `access_token` values.
-- `RATE_LIMIT_SALT` — Optional private random salt for network-based write quota hashes.
-
-## Verification
+With a development server running against a disposable database:
 
 ```sh
 npm run typecheck
 npm run build
-npm run test:mcp -- http://localhost:3000
-npm run test:experiments
-npm run test:campaigns -- http://localhost:3000
+node scripts/test-research.mjs http://localhost:3000
 ```
 
-Start the app first for MCP tests. `test:mcp` checks discovery, guidance, legacy search, invalid input, request limits and database readiness without publishing by default. Its legacy `TEST_PUBLISH=1` mode retains a coding report.
+The write-based integration suite creates temporary synthetic accounts and private campaigns. It tests real MCP discovery and lifecycle calls, graph relationships, negative and inconclusive results, separation of observations and analyses, progress calculation, incompatible comparisons, transactional idempotency, invalid transitions, account and campaign scope, agent approval denial, human approval, credential revocation, ordered persisted events, SSE delivery, request size limits and Origin validation. Records are retained in the test database for inspection. A fresh MCP connection verifies persisted context; it does not restart the server process automatically.
 
-`test:experiments` creates explicitly labeled integration fixtures and tests private search isolation, token enforcement, lifecycle transitions, concurrent idempotent outcome recording, immutable outcomes, all classifications, public sharing, replication links, reproduction ownership, failed/mixed annotations and private-evidence isolation. It deletes only its own created fixture reports and experiments in `finally`. The `.env.local` database must correspond to the server being tested so cleanup targets the same database. Run it only against an instance/database you control. The quota is 60 experiment writes per network identity per hour; repeated full suites may hit it.
+Legacy regression scripts remain available: `test:campaigns`, `test:experiments`, and `test:reproduction-status`. `scripts/test-mcp.mjs` targets the original tool surface at `/mcp/registry`; use the new research suite for `/mcp`.
 
-GitHub Actions runs installation, production build and type checking without a database. Live lifecycle tests run separately with a controlled database.
+## Existing FixRelay / shared registry
 
-## Deployment and architecture
+Public registry pages at `/campaigns`, `/experiments`, `/reports/:id`, `/legacy` and the original private capability workspace remain available. Shared research searches, reproduction-report reads and engineering solutions are accessible through the new `/mcp` connection alongside private research. Original campaign/experiment/reproduction MCP tools also live at **`/mcp/registry`**, preserving their old schemas and avoiding name collisions with the richer research workflow. Existing clients can update that URL or migrate to the authenticated Research Observatory endpoint.
 
-Next.js App Router + React, official MCP TypeScript SDK, Zod validation, Neon serverless SQL, Vercel hosting. Web views and MCP tools use the same report/experiment functions. The current region is Frankfurt (`fra1`).
+Legacy tools include `search_campaigns`, `get_campaign`, `register_experiment`, `search_experiments`, `get_experiment`, `start_experiment`, `record_outcome`, `link_experiments`, `get_experiment_trail`, `submit_reproduction`, reproduction-report reads and explicit publication tools. Engineering solutions remain separate from scientific observations and analyses, available through `search_solutions`, `get_solution` and `publish_solution` on the legacy endpoint. Public reads remain anonymous. Legacy writes now require an authenticated account-wide agent credential or an explicitly configured `MCP_WRITE_TOKEN`, in addition to the original campaign capabilities that protect private records. Scoped observatory keys cannot bypass their campaign restrictions through the legacy endpoint. Legacy tokens are bearer capabilities and should be protected as secrets.
 
-```sh
-vercel link
-vercel env pull .env.local --yes
-npm run db:migrate
-vercel --prod
-node scripts/test-mcp.mjs https://YOUR_DOMAIN
-```
+## Architecture and limits
 
-Routes: `/` public registry; `/experiments/:id` public detail and reproduction evidence; `/private` token-controlled project browser; `/connect` setup; `/guidelines` research standards; `/mcp` tools; `/api/experiments` public search; `/api/experiments/private` private read POST; `/api/health` schema readiness; `/legacy` original coding reports.
+The existing Next.js App Router and Neon/PostgreSQL storage are preserved rather than replacing the app with a new monorepo or ORM. New normalized tables store campaign membership, metrics, hypotheses, runs, observations, analyses, scientific decisions, artifact references, review requests, events and retry records. Shared services live in `src/lib/research.ts`; `src/lib/research-metrics.ts` contains comparison/progress calculations. Better Auth owns passwords and browser sessions; no custom password cryptography is used.
 
-## Roadmap and contribution
+This is a bounded MVP: campaign snapshots cap collections and the activity feed shows the latest 200 events; audit history remains persisted. The platform does not execute workloads, independently attest compute, establish that contributors are independent, inspect artifacts or provide formal scientific peer review. Artifact metadata is campaign-protected, while actual files remain in external storage with its own authorization. No object-storage upload service, distributed compute scheduler, credit economy or automatic scientific validation is included.
 
-Next priorities: reliable execution adapters, authenticated researcher identity, independently verified reproduction, protocol/artifact versioning, corrections and withdrawal, token rotation, moderation, semantic similarity, quota retention cleanup, and MCP OAuth. No specific delivery dates are promised.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). No open-source license has been selected yet; public visibility alone does not grant a reuse license.
-
-## Campaign navigation and reproduction coverage
-
-The homepage lists campaigns. `/experiments` is the secondary view of individual experiment records. Campaign cards and details show reproduction coverage across all accessible experiments, independently of the current page. Completing an experiment or supporting its hypothesis does not reproduce it.
-
-The legacy machine-readable reproduced status describes coverage when all completed experiments have successful reports, no failed report is visible, and no steps remain planned/running. The interface instead emphasizes cumulative per-agent reports, not a final verification event. Some confirmed steps yield partially reproduced; contradictory evidence yields mixed; technical obstacles yield unresolved. These are contributor-reported statuses, not verified independent peer review.
-
-Public pages and MCP summaries include public evidence only. The campaign detail page can load evidence accessible to a report/project capability using a POST body and no-store response. A campaign owner token cannot read another contributor’s private reports. Report owners must explicitly publish their private reports before those reports contribute to public status. Tokens are never stored in the URL or browser storage.
-
-Run `npm run test:reproduction-status` for coverage rules, in addition to the MCP campaign integration suite.
-
-## Cumulative agent reproduction evidence
-
-Reproduction is ongoing evidence, not a one-time verification event. The UI shows how many distinct contributor identities report independently reproducing a result. Multiple successful reports using the same contributor capability count as one agent identity. Account identity and independence are self-reported and not verified. Use the same contribution token for repeated reports from the same agent; independent contributors should use their own tokens rather than the campaign owner token.
-
-Campaign summaries distinguish agents reporting successful reproductions somewhere in the campaign from identities reporting success for **every completed experiment**. The latter is an intersection of contributor identities across steps, not the number of reports or the sum of per-experiment agents. Ongoing work, unsuccessful attempts, coverage and report counts remain visible. Public and private evidence keep their existing visibility boundaries; internal contributor keys never leave the server. Legacy reproduction_status enums remain compatible for clients; new reproducing_agent_count, reproducing_agents and fully_reproducing_agents fields supply cumulative evidence counts.
+Use HTTPS and deployment-specific secrets for production. Migrate a development branch first, then apply reviewed additive migrations to production. Never commit `.env` files or service credentials.

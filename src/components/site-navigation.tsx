@@ -12,29 +12,38 @@ import {
   X,
   LockKeyhole,
   House,
+  Telescope,
+  Settings2,
 } from "lucide-react";
 export function SiteBreadcrumb() {
   const path = usePathname();
   const label =
     path === "/"
-      ? "Overview"
-      : path === "/campaigns"
-      ? "Campaigns"
-      : path.startsWith("/campaigns/")
-        ? "Campaign"
-        : path === "/experiments"
-          ? "Experiments"
-          : path.startsWith("/experiments/")
-            ? "Experiment"
-            : path === "/connect"
-              ? "Connect"
-              : path === "/private"
-                ? "Private workspace"
-                : path === "/guidelines"
-                  ? "Guidelines"
-                  : path.startsWith("/legacy") || path.startsWith("/reports")
-                    ? "Legacy reports"
-                    : "Research";
+      ? "About RogNet"
+      : path.startsWith("/observatory")
+        ? "Research Observatory"
+        : path.startsWith("/settings")
+          ? "Account and agent credentials"
+          : path.startsWith("/sign-in")
+            ? "Sign in"
+            : path === "/campaigns"
+              ? "Campaigns"
+              : path.startsWith("/campaigns/")
+                ? "Campaign"
+                : path === "/experiments"
+                  ? "Experiments"
+                  : path.startsWith("/experiments/")
+                    ? "Experiment"
+                    : path === "/connect"
+                      ? "Connect"
+                      : path === "/private"
+                        ? "Private workspace"
+                        : path === "/guidelines"
+                          ? "Guidelines"
+                          : path.startsWith("/legacy") ||
+                              path.startsWith("/reports")
+                            ? "Legacy reports"
+                            : "Research";
   return (
     <div className="breadcrumb" aria-label={`Current section: ${label}`}>
       <span className="breadcrumb-root">Research</span>{" "}
@@ -71,12 +80,20 @@ export function SiteNavigation() {
   const links = (
     <>
       <Link
+        href="/observatory"
+        aria-current={path.startsWith("/observatory") ? "page" : undefined}
+        onClick={() => setOpen(false)}
+      >
+        <Telescope size={17} aria-hidden="true" />
+        Research Observatory
+      </Link>
+      <Link
         href="/"
         aria-current={path === "/" ? "page" : undefined}
         onClick={() => setOpen(false)}
       >
         <House size={17} aria-hidden="true" />
-        Overview
+        About RogNet
       </Link>
       <Link
         href="/campaigns"
@@ -84,7 +101,7 @@ export function SiteNavigation() {
         onClick={() => setOpen(false)}
       >
         <Search size={17} aria-hidden="true" />
-        Campaigns
+        Shared campaigns
       </Link>
       <Link
         href="/experiments"
@@ -100,7 +117,15 @@ export function SiteNavigation() {
         onClick={() => setOpen(false)}
       >
         <LockKeyhole size={17} aria-hidden="true" />
-        Private workspace
+        Legacy private records
+      </Link>
+      <Link
+        href="/settings"
+        aria-current={path.startsWith("/settings") ? "page" : undefined}
+        onClick={() => setOpen(false)}
+      >
+        <Settings2 size={17} aria-hidden="true" />
+        Account &amp; credentials
       </Link>
       <Link
         href="/connect"

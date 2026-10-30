@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { registryDb } from './registry-db';
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
@@ -33,7 +33,7 @@ export type Report = z.infer<typeof reportSchema> & {
 };
 export function db() {
   if (!process.env.DATABASE_URL) throw new Error("Database is not configured");
-  return neon(process.env.DATABASE_URL);
+  return registryDb();
 }
 
 export async function searchReports(

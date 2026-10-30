@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import { randomUUID, randomBytes } from "node:crypto";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { neon } from "@neondatabase/serverless";
+import pg from "pg";
 const base = process.argv[2] || "http://localhost:3000";
 if (!process.env.DATABASE_URL)
   throw new Error("Database required for exact fixture cleanup.");
-const sql = neon(process.env.DATABASE_URL),
-  campaigns = [],
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const sql = async (parts, ...values) => (await pool.query(parts.reduce((text, part, i) => text + (i ? `$${i}` : "") + part, ""), values)).rows;
+const credential = process.env.ROGNET_AGENT_KEY || process.env.MCP_WRITE_TOKEN;
+if (!credential) throw new Error("Set ROGNET_AGENT_KEY to an account-wide credential, or set the configured legacy MCP_WRITE_TOKEN.");
+const campaigns = [],
   ids = [],
   marker = randomUUID(),
   token = randomBytes(32).toString("base64url"),
@@ -16,14 +19,8 @@ const client = new Client({ name: "campaign-mvp-test", version: "0.3.0" });
 const local = new URL(base).hostname === "localhost";
 await client.connect(
   new StreamableHTTPClientTransport(
-    new URL("/mcp", base),
-    local
-      ? {
-          requestInit: {
-            headers: { "x-vercel-forwarded-for": `test-${marker}` },
-          },
-        }
-      : undefined,
+    new URL("/mcp/registry", base),
+    { requestInit: { headers: { Authorization: `Bearer ${credential}`, ...(local ? { "x-vercel-forwarded-for": `test-${marker}` } : {}) } } },
   ),
 );
 const call = (name, args) => client.callTool({ name, arguments: args });
@@ -408,4 +405,5 @@ try {
   console.log(
     `Cleaned ${ids.length} experiments and ${campaigns.length} campaigns.`,
   );
+  await pool.end();
 }

@@ -6,7 +6,7 @@ const client = new Client({
   name: "fixrelay-integration-test",
   version: "1.0.0",
 });
-await client.connect(new StreamableHTTPClientTransport(new URL("/mcp", base)));
+await client.connect(new StreamableHTTPClientTransport(new URL("/mcp/registry", base)));
 const data = (result) => JSON.parse(result.content[0].text);
 try {
   const tools = await client.listTools();
@@ -110,7 +110,7 @@ try {
     arguments: { id: "00000000-0000-0000-0000-000000000000" },
   });
   assert.equal(missing.isError, true);
-  const oversized = await fetch(`${base}/mcp`, {
+  const oversized = await fetch(`${base}/mcp/registry`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -119,7 +119,7 @@ try {
     body: JSON.stringify({ padding: "x".repeat(100001) }),
   });
   assert.equal(oversized.status, 413);
-  const malformed = await fetch(`${base}/mcp`, {
+  const malformed = await fetch(`${base}/mcp/registry`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{bad",

@@ -34,7 +34,7 @@ const pageShape = {
 export function registerCampaignTools(server: McpServer, request: Request) {
   const identity = clientIdentity(request);
   async function guard(fn: () => Promise<unknown>) {
-    if (!canWrite(request))
+    if (!(await canWrite(request)))
       return {
         ...output({ error: "Writing requires the operator bearer token" }),
         isError: true,

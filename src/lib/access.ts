@@ -1,7 +1,14 @@
 import { timingSafeEqual } from "node:crypto";
-export function canWrite(request: Request) {
+import { assertSameOrigin, requirePrincipal } from './auth-access';
+export async function canWrite(request: Request) {
+  try {
+    const principal=await requirePrincipal(request);
+    if(principal.kind==='human')assertSameOrigin(request);
+    // Scoped observatory credentials cannot be used to bypass campaign checks in the legacy API.
+    return principal.kind==='human' || !principal.campaignId;
+  } catch { /* Legacy operator credential remains valid when explicitly configured. */ }
   const token = process.env.MCP_WRITE_TOKEN;
-  if (!token) return true;
+  if (!token) return false;
   const provided = request.headers.get("authorization") || "";
   const expected = `Bearer ${token}`;
   const a = Buffer.from(provided),
