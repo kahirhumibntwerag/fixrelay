@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
-  CheckCheck,
   FlaskConical,
   GitBranch,
   LayoutDashboard,
@@ -29,7 +28,7 @@ const tabs = [
   { id: "hypotheses", label: "Hypotheses", icon: GitBranch },
   { id: "experiments", label: "Experiments", icon: FlaskConical },
   { id: "activity", label: "Activity", icon: Activity },
-  { id: "review", label: "Researcher review", icon: ShieldCheck },
+  { id: "review", label: "Review", icon: ShieldCheck },
 ] as const;
 
 async function responseData(response: Response) {
@@ -54,7 +53,6 @@ async function responseData(response: Response) {
 }
 
 export function Observatory({
-  userName,
   initialCampaign,
 }: {
   userName: string;
@@ -178,25 +176,17 @@ export function Observatory({
   }
   return (
     <div className="observatory">
-      <div className="obs-topline">
-        <div className="obs-eyebrow">
-          <span /> RESEARCH OBSERVATORY
-        </div>
-        <Link href="/settings">
-          Agent credentials <ArrowUpRight size={14} />
-        </Link>
-      </div>
       <div className="obs-heading">
-        <div>
-          <h1>Your research, in focus.</h1>
-          <p>Follow the question. Inspect the evidence. Guide the next step.</p>
-        </div>
-        <div className="obs-inline">
+        <h1>Research observatory</h1>
+        <div className="obs-inline obs-header-actions">
+          <Link className="obs-text-link" href="/settings">
+            Connect agent <ArrowUpRight size={16} />
+          </Link>
           <button
-            className="obs-button"
+            className="obs-link-button"
             onClick={() => setImporting(!importing)}
           >
-            Import legacy campaign
+            Import campaign
           </button>
           <button
             className="obs-button obs-primary"
@@ -230,7 +220,7 @@ export function Observatory({
       {campaigns.length > 0 && (
         <div className="obs-campaign-bar">
           <label>
-            RESEARCH CAMPAIGN
+            Campaign
             <select
               value={campaignId}
               onChange={(event) => setCampaignId(event.target.value)}
@@ -242,13 +232,17 @@ export function Observatory({
               ))}
             </select>
           </label>
-          <div className={`obs-live obs-live-${connection}`}>
+          <div
+            className={`obs-live obs-live-${connection}`}
+            role="status"
+            aria-live="polite"
+          >
             <span />
             {connection === "live"
-              ? "Live updates"
+              ? "Live"
               : connection === "reconnecting"
-                ? "Reconnecting · auto refresh active"
-                : "Connecting"}
+                ? "Reconnecting…"
+                : "Connecting…"}
           </div>
           <button
             className="obs-icon-button"
@@ -262,8 +256,7 @@ export function Observatory({
       {loading && (
         <div className="obs-empty" role="status">
           <div className="obs-loader" />
-          <h2>Loading your research</h2>
-          <p>Retrieving the latest persisted evidence.</p>
+          <h2>Loading research…</h2>
         </div>
       )}
       {!loading && !campaigns.length && !error && !creating && (
@@ -271,12 +264,9 @@ export function Observatory({
           <div className="obs-empty-icon">
             <FlaskConical size={30} />
           </div>
-          <span className="obs-eyebrow">WELCOME, {userName.toUpperCase()}</span>
-          <h2>Every discovery starts with a question.</h2>
+          <h2>No campaigns yet</h2>
           <p>
-            Create a private campaign with a measurable objective. Connect an
-            agent to register hypotheses, report experiments, and request your
-            review.
+            Create a campaign to track your research question and experiments.
           </p>
           <button
             className="obs-button obs-primary"
@@ -284,17 +274,6 @@ export function Observatory({
           >
             <Plus size={16} /> Create your first campaign
           </button>
-          <div className="obs-empty-steps">
-            <span>
-              <GitBranch size={17} /> Form a hypothesis
-            </span>
-            <span>
-              <Activity size={17} /> Collect evidence
-            </span>
-            <span>
-              <CheckCheck size={17} /> Review the next step
-            </span>
-          </div>
           <Link href="/campaigns" className="obs-text-link">
             Explore shared research <ArrowUpRight size={14} />
           </Link>
@@ -410,10 +389,7 @@ function CampaignImport({
   return (
     <form className="obs-card obs-campaign-form" onSubmit={submit}>
       <div className="obs-card-heading">
-        <div>
-          <span className="obs-eyebrow">CONTINUE EXISTING WORK</span>
-          <h2>Import a legacy RogNet campaign</h2>
-        </div>
+        <h2>Import an existing campaign</h2>
         <button
           type="button"
           className="obs-icon-button"
@@ -424,8 +400,7 @@ function CampaignImport({
         </button>
       </div>
       <p className="obs-muted">
-        Connect a campaign to your researcher account using its original access
-        token. Your existing campaign and reproduction records remain linked.
+        Link a campaign created before sign-in using its original access token.
       </p>
       <div className="obs-form-grid">
         <label>
@@ -434,7 +409,7 @@ function CampaignImport({
             name="campaign_id"
             required
             maxLength={36}
-            placeholder="Campaign UUID"
+            placeholder="Enter the campaign ID"
           />
         </label>
         <label>
@@ -446,7 +421,7 @@ function CampaignImport({
             autoComplete="off"
             minLength={24}
             maxLength={200}
-            placeholder="Original private campaign token"
+            placeholder="Enter the original access token"
           />
         </label>
       </div>
@@ -535,12 +510,7 @@ function CampaignForm({
   return (
     <form className="obs-card obs-campaign-form" onSubmit={submit}>
       <div className="obs-card-heading">
-        <div>
-          <span className="obs-eyebrow">
-            A CLEAR QUESTION, A MEASURABLE GOAL
-          </span>
-          <h2>Create a research campaign</h2>
-        </div>
+        <h2>New campaign</h2>
         <button
           type="button"
           className="obs-icon-button"
@@ -550,10 +520,7 @@ function CampaignForm({
           <X size={19} />
         </button>
       </div>
-      <p className="obs-muted">
-        Your campaign starts private. Goals and evaluation criteria are
-        registered before results arrive.
-      </p>
+      <p className="obs-muted">Campaigns are private until you share them.</p>
       <div className="obs-form-grid">
         <label className="obs-span-two">
           Campaign title
@@ -576,13 +543,13 @@ function CampaignForm({
           />
         </label>
         <label className="obs-span-two">
-          Measurable objective
+          Objective
           <textarea
             name="objective"
             minLength={20}
             maxLength={2000}
             required
-            placeholder="Describe the goal and what a useful result would mean."
+            placeholder="What result would answer your question?"
           />
         </label>
         <label>
@@ -599,14 +566,14 @@ function CampaignForm({
           <input name="unit" maxLength={40} placeholder="e.g. dB" />
         </label>
         <label>
-          Optimization direction
+          Goal
           <select
             value={direction}
             onChange={(event) => setDirection(event.target.value)}
           >
-            <option value="maximize">Maximize</option>
-            <option value="minimize">Minimize</option>
-            <option value="range">Reach a range</option>
+            <option value="maximize">Higher is better</option>
+            <option value="minimize">Lower is better</option>
+            <option value="range">Within a target range</option>
           </select>
         </label>
         <label>
@@ -624,17 +591,17 @@ function CampaignForm({
           </label>
         )}
         <label className="obs-span-two">
-          Evaluation methodology
+          How to measure results
           <textarea
             name="evaluation_protocol"
             minLength={10}
             maxLength={4000}
             required
-            placeholder="Define the dataset, evaluation method, and metric so results can be compared."
+            placeholder="Describe the data and method used to measure this metric."
           />
         </label>
         <label>
-          Research constraints
+          Constraints (optional)
           <textarea
             name="constraints"
             maxLength={4000}
@@ -642,7 +609,7 @@ function CampaignForm({
           />
         </label>
         <label>
-          Stopping conditions
+          When to stop (optional)
           <textarea
             name="stop_conditions"
             maxLength={4000}

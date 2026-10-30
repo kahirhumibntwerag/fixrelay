@@ -10,7 +10,6 @@ import {
   ChevronRight,
   Clock3,
   FlaskConical,
-  GitBranch,
   Search,
   ShieldCheck,
   TriangleAlert,
@@ -130,295 +129,251 @@ export function OverviewPanel({
     tab: "overview" | "hypotheses" | "experiments" | "activity" | "review",
   ) => void;
 }) {
-  const metric = data.metrics[0],
-    active = data.runs.filter((run) => run.status === "running"),
-    latestDecisions = data.decisions.slice(-3).reverse();
-  const failed = data.runs.filter((run) => run.status === "failed"),
-    stale = active.filter((run) => run.stale);
+  const metric = data.metrics[0];
+  const active = data.runs.filter((run) => run.status === "running");
+  const stale = active.filter((run) => run.stale);
   const pending = data.reviews.filter((review) => review.status === "pending");
-  const hasAttention = pending.length + failed.length + stale.length > 0;
+  const runsTruncated = data.runs.length >= 1500;
+  const latestRun = runsTruncated
+    ? undefined
+    : data.runs.reduce<(typeof data.runs)[number] | undefined>(
+        (latest, run) =>
+          !latest ||
+          (run.completed_at || run.started_at) >
+            (latest.completed_at || latest.started_at)
+            ? run
+            : latest,
+        undefined,
+      );
+  const latestDecision =
+    data.decisions.length < 1000 ? data.decisions.at(-1) : undefined;
+  const currentRun =
+    data.summary.active_experiments > 0 ? active.at(-1) : latestRun;
+  const latestFailure = latestRun?.status === "failed" ? latestRun : null;
+  const hasAttention = pending.length > 0 || stale.length > 0;
+  const hasMeasurements = data.observations.some(
+    (observation) =>
+      observation.metric_id === metric?.id &&
+      observation.value != null &&
+      observation.unit === metric?.unit &&
+      observation.conditions_key === metric?.evaluation_protocol &&
+      data.runs.some(
+        (run) => run.id === observation.run_id && run.status === "completed",
+      ),
+  );
+  const state =
+    !runsTruncated && active.length && active.length === stale.length
+      ? "Waiting for an agent update"
+      : data.summary.active_experiments > 0
+        ? `${data.summary.active_experiments} ${data.summary.active_experiments === 1 ? "experiment running" : "experiments running"}`
+        : data.summary.pending_reviews > 0
+          ? "Waiting for your review"
+          : latestFailure
+            ? "Latest run stopped before completion"
+            : latestRun?.status === "completed"
+              ? "Latest run completed"
+              : "No experiments running";
   return (
     <div className="obs-overview">
       <section className="obs-card obs-objective">
         <div className="obs-card-heading">
-          <div className="obs-eyebrow">THE RESEARCH QUESTION</div>
-          <div className="obs-inline">
-            <span className="obs-private">{data.campaign.visibility}</span>
-            <Badge status={data.campaign.status || "active"} />
-          </div>
+          <span className="obs-eyebrow">Research question</span>
+          <span className="obs-private">{data.campaign.visibility}</span>
         </div>
         <h2>{data.campaign.question}</h2>
-        <p>{data.campaign.objective || data.campaign.summary}</p>
-        {metric ? (
-          <>
-            <div className="obs-objective-metrics">
-              <div>
-                <span>PRIMARY METRIC</span>
-                <strong>
-                  {metric.name}
-                  <small>{metric.unit}</small>
-                </strong>
-              </div>
-              <div>
-                <span>BASELINE</span>
-                <strong>
-                  {numeric(metric.baseline)}
-                  <small>{metric.unit}</small>
-                </strong>
-              </div>
-              <div>
-                <span>TARGET · {words(metric.direction).toUpperCase()}</span>
-                <strong>
-                  {numeric(metric.target)}
-                  {metric.direction === "range"
-                    ? ` – ${numeric(metric.target_max)}`
-                    : ""}
-                  <small>{metric.unit}</small>
-                </strong>
-              </div>
-              <div>
-                <span>BEST REPRODUCED RESULT</span>
-                <strong>
-                  {numeric(data.summary.best_verified_result)}
-                  <small>{metric.unit}</small>
-                </strong>
-              </div>
+        <div className="obs-current-state" role="status">
+          <strong>{state}</strong>
+          {data.summary.pending_reviews > 0 ? (
+            <button
+              className="obs-link-button"
+              onClick={() => onNavigate("review")}
+            >
+              Review{" "}
+              {data.summary.pending_reviews === 1
+                ? "request"
+                : `${data.summary.pending_reviews} requests`}{" "}
+              <ArrowRight size={16} />
+            </button>
+          ) : currentRun ? (
+            <button
+              className="obs-link-button"
+              onClick={() => onInspectExperiment(currentRun.experiment_id)}
+            >
+              View experiment <ArrowRight size={16} />
+            </button>
+          ) : data.summary.active_experiments > 0 ? (
+            <button
+              className="obs-link-button"
+              onClick={() => onNavigate("experiments")}
+            >
+              View experiments <ArrowRight size={16} />
+            </button>
+          ) : null}
+        </div>
+        {metric && (
+          <div className="obs-objective-metrics obs-overview-metrics">
+            <div>
+              <span>Metric</span>
+              <strong>{words(metric.name)}</strong>
             </div>
-            <p className="obs-evidence-note">
-              Reproduction evidence and agent independence are self-reported.
-              This is not formal peer review.
-            </p>
-            {data.summary.progress_percent != null &&
-            Number.isFinite(Number(data.summary.progress_percent)) ? (
-              <div className="obs-objective-progress">
-                <div>
-                  <span>Progress from agent-reported results</span>
-                  <strong>{numeric(data.summary.progress_percent)}%</strong>
-                </div>
-                <progress
-                  max={100}
-                  value={Math.max(
-                    0,
-                    Math.min(100, Number(data.summary.progress_percent)),
-                  )}
-                />
-                <small>
-                  Based on comparable evidence. Metric improvement alone does
-                  not confirm a hypothesis.
-                </small>
-              </div>
-            ) : (
-              <p className="obs-muted">
-                {data.summary.target_gap != null
-                  ? `Target gap: ${numeric(data.summary.target_gap)} ${metric.unit || ""}. `
+            <div>
+              <span>
+                Target ·{" "}
+                {metric.direction === "range"
+                  ? "within range"
+                  : metric.direction === "minimize"
+                    ? "lower is better"
+                    : "higher is better"}
+              </span>
+              <strong>
+                {numeric(metric.target)}
+                {metric.direction === "range"
+                  ? ` – ${numeric(metric.target_max)}`
                   : ""}
-                A meaningful progress percentage is not yet available.
-              </p>
-            )}
-            <details className="obs-details">
-              <summary>Evaluation methodology and boundaries</summary>
-              <DataText label="Evaluation protocol">
+                <small>
+                  {metric.unit === "dimensionless" ? "" : metric.unit}
+                </small>
+              </strong>
+            </div>
+            <div>
+              <span>Best result</span>
+              <strong>
+                {data.summary.best_result == null
+                  ? "No results yet"
+                  : numeric(data.summary.best_result)}
+                {data.summary.best_result != null && (
+                  <small>
+                    {metric.unit === "dimensionless" ? "" : metric.unit}
+                  </small>
+                )}
+              </strong>
+            </div>
+          </div>
+        )}
+        <details className="obs-details">
+          <summary>Research plan</summary>
+          <DataText label="Objective">
+            {data.campaign.objective || data.campaign.summary}
+          </DataText>
+          {metric && (
+            <>
+              <DataText label="Evaluation method">
                 {metric.evaluation_protocol}
               </DataText>
-              <DataText label="Constraints">
-                {data.campaign.constraints || "No constraints recorded."}
-              </DataText>
-              <DataText label="Stopping conditions">
-                {data.campaign.stop_conditions ||
-                  "No stopping conditions recorded."}
-              </DataText>
-            </details>
-          </>
-        ) : (
-          <p className="obs-muted">
-            No primary metric has been registered for this campaign.
-          </p>
-        )}
+              {metric.baseline != null && (
+                <DataText label="Baseline">
+                  {numeric(metric.baseline)}{" "}
+                  {metric.unit === "dimensionless" ? "" : metric.unit}
+                </DataText>
+              )}
+            </>
+          )}
+          <DataText label="Constraints">{data.campaign.constraints}</DataText>
+          <DataText label="When to stop">
+            {data.campaign.stop_conditions}
+          </DataText>
+          {data.summary.best_verified_result != null && (
+            <DataText label="Best reproduced result">
+              {numeric(data.summary.best_verified_result)} {metric?.unit}
+            </DataText>
+          )}
+        </details>
       </section>
-      <div className="obs-stats">
-        {[
-          {
-            label: "Active experiments",
-            value: data.summary.active_experiments,
-            icon: Activity,
-          },
-          {
-            label: "Completed experiments",
-            value: data.summary.completed_experiments,
-            icon: FlaskConical,
-          },
-          {
-            label: "Hypotheses investigated",
-            value: data.summary.hypotheses_investigated,
-            icon: GitBranch,
-          },
-          {
-            label: "Pending human decisions",
-            value: data.summary.pending_reviews,
-            icon: ShieldCheck,
-          },
-        ].map((stat) => (
-          <div className="obs-stat" key={stat.label}>
-            <div>
-              <span>{stat.label}</span>
-              <stat.icon size={17} />
-            </div>
-            <strong>{stat.value ?? 0}</strong>
-          </div>
-        ))}
-      </div>
-      <div className="obs-two-columns">
+      {hasAttention && (
         <section className="obs-card">
           <div className="obs-card-heading">
-            <h2>Current agent activity</h2>
-            <span className="obs-subtle-label">REPORTED BY AGENTS</span>
+            <h2>Needs attention</h2>
+            <TriangleAlert size={20} className="obs-warning" />
           </div>
-          {active.length ? (
-            active.slice(0, 4).map((run) => (
-              <div className="obs-active-run" key={run.id}>
-                <div className="obs-inline">
-                  <strong>{run.agent}</strong>
-                  <Badge status={run.stale ? "stale" : run.status} />
-                </div>
-                <h3>
-                  {data.experiments.find(
-                    (experiment) => experiment.id === run.experiment_id,
-                  )?.title || "Experiment"}
-                </h3>
-                <p>
-                  {run.task || "Run in progress; no task description reported."}
-                </p>
-                {run.progress != null && (
-                  <div className="obs-run-progress">
-                    <progress
-                      max={100}
-                      value={Math.max(0, Math.min(100, Number(run.progress)))}
-                    />
-                    <span>{numeric(run.progress)}%</span>
-                  </div>
-                )}
-                <small>
-                  Last heartbeat ·{" "}
-                  {date(run.last_heartbeat_at || run.started_at)}
-                </small>
-                {run.next_action && (
-                  <div className="obs-next-action">
-                    <ArrowRight size={14} />
-                    {run.next_action}
-                  </div>
-                )}
-              </div>
-            ))
-          ) : (
-            <Empty title="No active runs">
-              Agents report activity when a run starts. Connect an agent to
-              continue this campaign.
-            </Empty>
-          )}
-        </section>
-        <section className="obs-card">
-          <div className="obs-card-heading">
-            <h2>Attention required</h2>
-            {hasAttention && (
-              <TriangleAlert size={17} className="obs-warning" />
-            )}
-          </div>
-          {hasAttention ? (
-            <div className="obs-attention-list">
-              {pending.map((review) => (
-                <button key={review.id} onClick={() => onNavigate("review")}>
-                  <ShieldCheck size={17} />
-                  <span>
-                    <strong>Researcher approval requested</strong>
-                    <small>{review.proposed_action}</small>
-                  </span>
-                  <ChevronRight size={17} />
-                </button>
-              ))}
-              {stale.map((run) => (
-                <div key={run.id}>
-                  <Clock3 size={17} />
-                  <span>
-                    <strong>{run.agent} has stopped reporting</strong>
-                    <small>
-                      Heartbeat stale. The experiment has not been marked
-                      failed.
-                    </small>
-                  </span>
-                </div>
-              ))}
-              {failed.slice(0, 3).map((run) => (
-                <button key={run.id} onClick={() => onNavigate("experiments")}>
-                  <TriangleAlert size={17} />
-                  <span>
-                    <strong>Run needs investigation</strong>
-                    <small>
-                      {data.experiments.find(
-                        (experiment) => experiment.id === run.experiment_id,
-                      )?.title || run.id}
-                    </small>
-                  </span>
-                  <ChevronRight size={17} />
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="obs-clear">
-              <div>
-                <Check size={21} />
-              </div>
-              <h3>No outstanding attention items</h3>
-              <p>
-                Review requests, technical failures, and stale agent activity
-                appear here.
-              </p>
-            </div>
-          )}
-        </section>
-      </div>
-      <MetricTrend data={data} onInspectExperiment={onInspectExperiment} />
-      <section className="obs-card">
-        <div className="obs-card-heading">
-          <h2>Recent scientific findings</h2>
-          <button
-            className="obs-link-button"
-            onClick={() => onNavigate("activity")}
-          >
-            View activity <ArrowRight size={14} />
-          </button>
-        </div>
-        {latestDecisions.length ? (
-          <div className="obs-findings">
-            {latestDecisions.map((decision) => (
-              <article key={decision.id}>
-                <div className="obs-inline">
-                  <Badge status={decision.outcome} />
-                  <span className="obs-subtle-label">AGENT INTERPRETATION</span>
-                </div>
-                <h3>
-                  {data.hypotheses.find(
-                    (hypothesis) => hypothesis.id === decision.hypothesis_id,
-                  )?.title || "Scientific decision"}
-                </h3>
-                <p>{decision.rationale}</p>
-                <EvidenceLinks ids={decision.evidence_ids} data={data} />
-                <div className="obs-next-action">
-                  <ArrowRight size={14} />
-                  {words(decision.next_action)}
-                </div>
-                <small>
-                  {decision.agent} · {date(decision.created_at)}
-                </small>
-              </article>
+          <div className="obs-attention-list">
+            {pending.map((review) => (
+              <button key={review.id} onClick={() => onNavigate("review")}>
+                <ShieldCheck size={19} />
+                <span>
+                  <strong>Approval requested</strong>
+                  <small>{review.proposed_action}</small>
+                </span>
+                <ChevronRight size={19} />
+              </button>
+            ))}
+            {stale.map((run) => (
+              <button
+                key={run.id}
+                onClick={() => onInspectExperiment(run.experiment_id)}
+              >
+                <Clock3 size={19} />
+                <span>
+                  <strong>{run.agent} has stopped reporting</strong>
+                  <small>Run status is unknown.</small>
+                </span>
+                <ChevronRight size={19} />
+              </button>
             ))}
           </div>
-        ) : (
-          <Empty title="The evidence trail starts here">
-            As agents analyze results, their supported, contradicted, and
-            inconclusive findings will appear here.
-          </Empty>
-        )}
-      </section>
+        </section>
+      )}
+      {active.length > 0 && (
+        <section className="obs-card">
+          <div className="obs-card-heading">
+            <h2>Running now</h2>
+          </div>
+          {active.slice(0, 4).map((run) => (
+            <div className="obs-active-run" key={run.id}>
+              <div className="obs-card-heading">
+                <h3>
+                  {data.experiments.find(
+                    (item) => item.id === run.experiment_id,
+                  )?.title || "Experiment"}
+                </h3>
+                <Badge status={run.stale ? "stale" : run.status} />
+              </div>
+              {run.task && <p>{run.task}</p>}
+              {run.progress != null && (
+                <div className="obs-run-progress">
+                  <progress
+                    max={100}
+                    value={Math.max(0, Math.min(100, Number(run.progress)))}
+                    aria-label="Run progress"
+                  />
+                  <span>{numeric(run.progress)}%</span>
+                </div>
+              )}
+              <small>
+                {run.agent} · Updated{" "}
+                {date(run.last_heartbeat_at || run.started_at)}
+              </small>
+              <button
+                className="obs-link-button"
+                onClick={() => onInspectExperiment(run.experiment_id)}
+              >
+                View experiment <ArrowRight size={16} />
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
+      {latestDecision && (
+        <section className="obs-card">
+          <div className="obs-card-heading">
+            <h2>Latest conclusion</h2>
+            <Badge status={latestDecision.outcome} />
+          </div>
+          <p>{latestDecision.rationale}</p>
+          <details className="obs-details">
+            <summary>Evidence and next step</summary>
+            <EvidenceLinks ids={latestDecision.evidence_ids} data={data} />
+            <DataText label="Next step">
+              {words(latestDecision.next_action)}
+            </DataText>
+            <small>
+              {latestDecision.agent} · {date(latestDecision.created_at)}
+            </small>
+          </details>
+        </section>
+      )}
+      {hasMeasurements && (
+        <MetricTrend data={data} onInspectExperiment={onInspectExperiment} />
+      )}
       <SharingPanel data={data} onUpdated={onUpdated} />
     </div>
   );
@@ -480,19 +435,14 @@ function SharingPanel({
         <summary className="obs-share-heading">
           <span>
             <ShieldCheck size={18} />
-            Share findings with the research community
+            Publish findings
           </span>
-          <span className="obs-subtle-label">DELIBERATE PUBLICATION</span>
         </summary>
         <p className="obs-muted">
-          Publish selected completed experiments to RogNet’s shared registry.
-          Their experimental design, observations, evidence, limitations, and
-          campaign summary become publicly readable. Run configurations and the
-          internal activity trail remain private.
-        </p>
-        <p className="obs-muted">
-          Review every selected record for private data, credentials,
-          unpublished work, and third-party restrictions before publishing.
+          Selected experiments and the campaign summary will be public,
+          including methods, observations, evidence, and limitations. Review
+          them for private information before publishing. Run configurations and
+          activity remain private.
         </p>
         {completed.length ? (
           <form onSubmit={publish}>
@@ -517,7 +467,6 @@ function SharingPanel({
                       {words(experiment.outcome || experiment.status)}
                     </small>
                   </span>
-                  <span className="obs-subtle-label">COMPLETED</span>
                 </label>
               ))}
             </div>
@@ -529,8 +478,8 @@ function SharingPanel({
                 onChange={(event) => setAcknowledged(event.target.checked)}
               />
               <span>
-                I reviewed these findings and approve publishing the selected
-                records and campaign summary publicly.
+                I reviewed the selected experiments and campaign summary and
+                approve making them public.
               </span>
             </label>
             {error && (
@@ -793,9 +742,8 @@ export function HypothesisPanel({ data }: { data: Snapshot }) {
   if (!data.hypotheses.length)
     return (
       <section className="obs-card">
-        <Empty title="A hypothesis gives the experiment a purpose">
-          Your agent can propose testable statements, register predictions, and
-          branch into follow-up questions through MCP.
+        <Empty title="No hypotheses yet">
+          Connect an agent to register a testable prediction.
         </Empty>
         <Link href="/settings" className="obs-text-link">
           Connect your research agent <ArrowUpRight size={14} />
@@ -824,13 +772,10 @@ export function HypothesisPanel({ data }: { data: Snapshot }) {
       <section className="obs-card">
         <div className="obs-card-heading">
           <div>
-            <h2>How the question evolves</h2>
-            <p className="obs-muted">
-              Select a hypothesis to inspect its prediction and evidence.
-            </p>
+            <h2>Hypotheses</h2>
           </div>
           <span className="obs-subtle-label">
-            {data.hypotheses.length} HYPOTHESES
+            {data.hypotheses.length} total
           </span>
         </div>
         <div className="obs-graph-scroll">
@@ -881,7 +826,6 @@ export function HypothesisPanel({ data }: { data: Snapshot }) {
                 aria-pressed={hypothesis.id === selectedId}
               >
                 <div>
-                  <span>{hypothesis.id.slice(0, 8)}</span>
                   <Badge status={hypothesis.status} />
                 </div>
                 <strong>{hypothesis.title || hypothesis.statement}</strong>
@@ -898,17 +842,6 @@ export function HypothesisPanel({ data }: { data: Snapshot }) {
             ))}
           </div>
         </div>
-        <div className="obs-legend">
-          {[
-            "untested",
-            "testing",
-            "supported",
-            "contradicted",
-            "inconclusive",
-          ].map((status) => (
-            <Badge key={status} status={status} />
-          ))}
-        </div>
       </section>
       {selected ? (
         <HypothesisDetail
@@ -918,13 +851,7 @@ export function HypothesisPanel({ data }: { data: Snapshot }) {
         />
       ) : (
         <div className="obs-card obs-graph-help">
-          <GitBranch size={27} />
-          <h3>Follow a branch of inquiry</h3>
-          <p>
-            Each node links a scientific statement to the experiments and
-            decisions that investigated it. Support is an agent interpretation
-            until a researcher validates the associated finding.
-          </p>
+          <p>Select a hypothesis to see its prediction and evidence.</p>
         </div>
       )}
     </div>
@@ -965,11 +892,12 @@ function HypothesisDetail({
         </button>
       </div>
       <h2>{hypothesis.title}</h2>
-      <DataText label="Scientific statement">{hypothesis.statement}</DataText>
-      <DataText label="Rationale">{hypothesis.rationale}</DataText>
-      <DataText label="Predicted measurable outcome">
-        {hypothesis.prediction}
-      </DataText>
+      <DataText label="Hypothesis">{hypothesis.statement}</DataText>
+      <DataText label="Prediction">{hypothesis.prediction}</DataText>
+      <details className="obs-details">
+        <summary>Rationale</summary>
+        <p>{hypothesis.rationale}</p>
+      </details>
       {hypothesis.parent_hypothesis_id && (
         <DataText label={words(hypothesis.relationship || "derived_from")}>
           {data.hypotheses.find(
@@ -978,7 +906,7 @@ function HypothesisDetail({
         </DataText>
       )}
       <div className="obs-data-text">
-        <span>ASSOCIATED EXPERIMENTS</span>
+        <span>Experiments</span>
         {experiments.length ? (
           experiments.map((experiment) => (
             <div className="obs-related" key={experiment.id}>
@@ -994,7 +922,6 @@ function HypothesisDetail({
         <div className="obs-decision" key={decision.id}>
           <div className="obs-inline">
             <Badge status={decision.outcome} />
-            <span className="obs-subtle-label">AGENT INTERPRETATION</span>
           </div>
           <p>{decision.rationale}</p>
           <EvidenceLinks ids={decision.evidence_ids} data={data} />
@@ -1044,13 +971,9 @@ export function ExperimentPanel({
         <div className="obs-card-heading">
           <div>
             <h2>Experiments</h2>
-            <p className="obs-muted">
-              Protocols, execution runs, and scientific outcomes remain
-              distinct.
-            </p>
           </div>
           <span className="obs-subtle-label">
-            {data.experiments.length} REGISTERED
+            {data.experiments.length} total
           </span>
         </div>
         <div className="obs-filters">
@@ -1096,9 +1019,6 @@ export function ExperimentPanel({
                       item.metric_id === data.metrics[0]?.id &&
                       item.value != null,
                   )
-                  .at(-1),
-                analysis = data.analyses
-                  .filter((item) => item.experiment_id === experiment.id)
                   .at(-1);
               return (
                 <button
@@ -1108,26 +1028,19 @@ export function ExperimentPanel({
                 >
                   <div className="obs-experiment-main">
                     <div className="obs-inline">
-                      <Badge status={experiment.status} />
-                      {experiment.outcome && (
-                        <Badge status={experiment.outcome} />
-                      )}
+                      <Badge status={experiment.outcome || experiment.status} />
                     </div>
                     <h3>{experiment.title}</h3>
                     <p>
-                      {data.hypotheses.find(
-                        (item) => item.id === experiment.hypothesis_id,
-                      )?.title || "Legacy experiment · no linked hypothesis"}
+                      {
+                        data.hypotheses.find(
+                          (item) => item.id === experiment.hypothesis_id,
+                        )?.title
+                      }
                     </p>
-                    {analysis && (
-                      <p className="obs-conclusion">
-                        {analysis.interpretation}
-                      </p>
-                    )}
                     <small>
                       {experiment.agent} · {runs.length}{" "}
-                      {runs.length === 1 ? "run" : "runs"} · Created{" "}
-                      {date(experiment.created_at)}
+                      {runs.length === 1 ? "run" : "runs"}
                     </small>
                   </div>
                   <div className="obs-experiment-value">
@@ -1135,10 +1048,10 @@ export function ExperimentPanel({
                       <>
                         <strong>{numeric(observation.value)}</strong>
                         <span>{observation.unit || data.metrics[0]?.unit}</span>
-                        <small>Latest reported metric</small>
+                        <small>Latest result</small>
                       </>
                     ) : (
-                      <span>Awaiting measurements</span>
+                      <span>No measurements</span>
                     )}
                   </div>
                   <ChevronRight size={18} />
@@ -1156,7 +1069,7 @@ export function ExperimentPanel({
           >
             {query || status !== "all"
               ? "Try another search or status."
-              : "Your agent registers an experimental design before starting an execution run."}
+              : "Your agent can register an experiment here."}
           </Empty>
         )}
       </section>
@@ -1199,7 +1112,6 @@ function ExperimentDetail({
     <section ref={detail} className="obs-card obs-detail">
       <div className="obs-card-heading">
         <div>
-          <span className="obs-eyebrow">EXPERIMENT DETAIL</span>
           <h2>{experiment.title}</h2>
         </div>
         <button
@@ -1211,22 +1123,23 @@ function ExperimentDetail({
         </button>
       </div>
       <div className="obs-inline">
-        <Badge status={experiment.status} />
-        {experiment.outcome && <Badge status={experiment.outcome} />}
+        <Badge status={experiment.outcome || experiment.status} />
       </div>
-      <DataText label="Scientific purpose">
-        {data.hypotheses.find(
-          (hypothesis) => hypothesis.id === experiment.hypothesis_id,
-        )?.statement || "No linked hypothesis."}
-      </DataText>
-      <DataText label="Methodology">{experiment.method}</DataText>
-      <DataText label="Registered success criteria">
-        {experiment.success_criteria}
-      </DataText>
       <BaselineComparison data={data} experimentId={experiment.id} />
       <details className="obs-details">
-        <summary>Experimental design and provenance</summary>
-        <DataText label="Inputs and dataset">{experiment.inputs}</DataText>
+        <summary>Method and success criteria</summary>
+        <DataText label="Hypothesis">
+          {
+            data.hypotheses.find(
+              (hypothesis) => hypothesis.id === experiment.hypothesis_id,
+            )?.statement
+          }
+        </DataText>
+        <DataText label="Method">{experiment.method}</DataText>
+        <DataText label="Success criteria">
+          {experiment.success_criteria}
+        </DataText>
+        <DataText label="Inputs">{experiment.inputs}</DataText>
         <DataText label="Evaluation conditions">
           {experiment.conditions}
         </DataText>
@@ -1237,103 +1150,100 @@ function ExperimentDetail({
           <pre>{JSON.stringify(experiment.controls, null, 2)}</pre>
         )}
       </details>
-      <h3>Execution runs</h3>
-      {runs.length ? (
-        runs.map((run) => (
-          <div className="obs-run-card" key={run.id}>
-            <div className="obs-card-heading">
-              <strong>{run.agent}</strong>
-              <Badge
-                status={
-                  run.stale && run.status === "running" ? "stale" : run.status
-                }
-              />
-            </div>
-            {run.task && <p>{run.task}</p>}
-            {run.progress != null && (
-              <div className="obs-run-progress">
-                <progress
-                  max={100}
-                  value={Math.min(100, Math.max(0, Number(run.progress)))}
+      <details className="obs-details">
+        <summary>Runs ({runs.length})</summary>
+        {runs.length ? (
+          runs.map((run) => (
+            <div className="obs-run-card" key={run.id}>
+              <div className="obs-card-heading">
+                <strong>{run.agent}</strong>
+                <Badge
+                  status={
+                    run.stale && run.status === "running" ? "stale" : run.status
+                  }
                 />
-                <span>{numeric(run.progress)}%</span>
               </div>
-            )}
-            <small>
-              Started {date(run.started_at)} ·{" "}
-              {run.completed_at
-                ? `Completed ${date(run.completed_at)}`
-                : `Last heartbeat ${date(run.last_heartbeat_at)}`}
-            </small>
-            <details className="obs-details">
-              <summary>Run configuration and technical details</summary>
-              <p>
-                Run ID: <code>{run.id}</code>
-              </p>
-              <pre>{JSON.stringify(run.configuration || {}, null, 2)}</pre>
-            </details>
-          </div>
-        ))
-      ) : (
-        <p className="obs-muted">No runs started.</p>
-      )}
+              {run.task && <p>{run.task}</p>}
+              {run.progress != null && (
+                <div className="obs-run-progress">
+                  <progress
+                    max={100}
+                    value={Math.min(100, Math.max(0, Number(run.progress)))}
+                  />
+                  <span>{numeric(run.progress)}%</span>
+                </div>
+              )}
+              <small>
+                Started {date(run.started_at)} ·{" "}
+                {run.completed_at
+                  ? `Completed ${date(run.completed_at)}`
+                  : `Last heartbeat ${date(run.last_heartbeat_at)}`}
+              </small>
+              <details className="obs-details">
+                <summary>Configuration</summary>
+                <p>
+                  Run ID: <code>{run.id}</code>
+                </p>
+                <pre>{JSON.stringify(run.configuration || {}, null, 2)}</pre>
+              </details>
+            </div>
+          ))
+        ) : (
+          <p className="obs-muted">No runs started.</p>
+        )}
+      </details>
       <ObservationList
         observations={data.observations.filter((observation) =>
           runIds.has(observation.run_id),
         )}
         data={data}
       />
-      <h3>Analysis and uncertainty</h3>
+      <h3>Analysis</h3>
       {analyses.length ? (
         analyses.map((analysis) => (
           <article className="obs-analysis" key={analysis.id}>
             <span className="obs-subtle-label">
-              AGENT INTERPRETATION ·{" "}
-              {analysis.conclusive ? "REPORTED CONCLUSIVE" : "NOT CONCLUSIVE"}
+              {analysis.conclusive
+                ? "Conclusive · agent assessment"
+                : "Inconclusive"}
             </span>
             <p>{analysis.interpretation}</p>
-            <DataText label="Comparison against prediction and baseline">
-              {analysis.comparison}
-            </DataText>
-            <DataText label="Limitations">
-              {analysis.limitations || "Not reported"}
-            </DataText>
-            <DataText label="Uncertainty">
-              {analysis.uncertainty || "Not reported"}
-            </DataText>
-            <DataText label="Potential confounding factors">
-              {analysis.confounders || "Not reported"}
-            </DataText>
+            <details className="obs-details">
+              <summary>Comparison and limitations</summary>
+              <DataText label="Comparison">{analysis.comparison}</DataText>
+              <DataText label="Limitations">{analysis.limitations}</DataText>
+              <DataText label="Uncertainty">{analysis.uncertainty}</DataText>
+              <DataText label="Potential confounding factors">
+                {analysis.confounders}
+              </DataText>
+            </details>
             <small>
               {analysis.agent} · {date(analysis.created_at)}
             </small>
           </article>
         ))
       ) : (
-        <p className="obs-muted">
-          No interpretation recorded. Observations above are measurements, not
-          conclusions.
-        </p>
-      )}
-      <h3>Scientific decisions</h3>
-      {decisions.length ? (
-        decisions.map((decision) => (
-          <article className="obs-decision" key={decision.id}>
-            <Badge status={decision.outcome} />
-            <p>{decision.rationale}</p>
-            <EvidenceLinks ids={decision.evidence_ids} data={data} />
-            <DataText label="Next proposed action">
-              {words(decision.next_action)}
-            </DataText>
-          </article>
-        ))
-      ) : (
-        <p className="obs-muted">No scientific decision recorded.</p>
+        <p className="obs-muted">No analysis yet.</p>
       )}
       <details className="obs-details">
-        <summary>
-          Artifacts and reproducibility information ({artifacts.length})
-        </summary>
+        <summary>Decisions and next steps ({decisions.length})</summary>
+        {decisions.length ? (
+          decisions.map((decision) => (
+            <article className="obs-decision" key={decision.id}>
+              <Badge status={decision.outcome} />
+              <p>{decision.rationale}</p>
+              <EvidenceLinks ids={decision.evidence_ids} data={data} />
+              <DataText label="Next proposed action">
+                {words(decision.next_action)}
+              </DataText>
+            </article>
+          ))
+        ) : (
+          <p className="obs-muted">No scientific decision recorded.</p>
+        )}
+      </details>
+      <details className="obs-details">
+        <summary>Artifacts ({artifacts.length})</summary>
         {artifacts.length ? (
           artifacts.map((artifact) => (
             <div className="obs-artifact" key={artifact.id}>
@@ -1348,7 +1258,7 @@ function ExperimentDetail({
                   rel="noopener noreferrer"
                   className="obs-text-link"
                 >
-                  Inspect protected artifact metadata <ArrowUpRight size={13} />
+                  View artifact <ArrowUpRight size={13} />
                 </Link>
               </p>
               <pre>{JSON.stringify(artifact.metadata || {}, null, 2)}</pre>
@@ -1388,26 +1298,14 @@ function BaselineComparison({
       observation.conditions_key === metric.evaluation_protocol,
   );
   const latest = compatible.at(-1);
-  if (!latest)
-    return (
-      <div className="obs-baseline">
-        <span className="obs-subtle-label">BASELINE COMPARISON</span>
-        <p>
-          No comparable completed measurement is available. The metric
-          definition, unit, and evaluation conditions must match the registered
-          protocol.
-        </p>
-      </div>
-    );
+  if (!latest) return null;
   const delta =
     metric.baseline == null
       ? null
       : Number(latest.value) - Number(metric.baseline);
   return (
     <div className="obs-baseline">
-      <span className="obs-subtle-label">
-        BASELINE COMPARISON · AGENT REPORTED
-      </span>
+      <span className="obs-subtle-label">Compared with baseline</span>
       <div>
         <strong>
           {numeric(latest.value)} <small>{latest.unit}</small>
@@ -1421,10 +1319,6 @@ function BaselineComparison({
             : `${delta > 0 ? "+" : ""}${numeric(delta)} ${metric.unit || ""} change`}
         </span>
       </div>
-      <p>
-        Evaluation conditions match the registered protocol. This comparison
-        describes a measurement; it does not establish scientific support.
-      </p>
     </div>
   );
 }
@@ -1438,7 +1332,7 @@ function ObservationList({
 }) {
   return (
     <div className="obs-observations">
-      <h3>Recorded observations</h3>
+      <h3>Observations</h3>
       {observations.length ? (
         observations.map((observation) => (
           <article id={`evidence-${observation.id}`} key={observation.id}>
@@ -1456,22 +1350,25 @@ function ObservationList({
               </div>
             )}
             {observation.qualitative && <p>{observation.qualitative}</p>}
-            <div className="obs-observation-meta">
-              <span>
-                Sample size: {observation.sample_size ?? "not reported"}
-              </span>
-              <span>
-                Uncertainty: {observation.uncertainty || "not reported"}
-              </span>
-            </div>
-            <DataText label="Evidence reference">
-              {observation.evidence || "No evidence reference recorded."}
-            </DataText>
-            <small className="obs-muted">
-              Evaluation conditions:{" "}
-              {observation.conditions_key ||
-                "not specified; excluded from comparison charts"}
-            </small>
+            <details className="obs-details">
+              <summary>Evidence and measurement details</summary>
+              <div className="obs-observation-meta">
+                <span>
+                  Sample size: {observation.sample_size ?? "not reported"}
+                </span>
+                <span>
+                  Uncertainty: {observation.uncertainty || "not reported"}
+                </span>
+              </div>
+              <DataText label="Evidence reference">
+                {observation.evidence || "No evidence reference recorded."}
+              </DataText>
+              <small className="obs-muted">
+                Evaluation conditions:{" "}
+                {observation.conditions_key ||
+                  "not specified; excluded from comparison charts"}
+              </small>
+            </details>
           </article>
         ))
       ) : (
@@ -1500,10 +1397,7 @@ export function ActivityPanel({ data }: { data: Snapshot }) {
     <section className="obs-card">
       <div className="obs-card-heading">
         <div>
-          <h2>The scientific activity trail</h2>
-          <p className="obs-muted">
-            Persisted actions and decisions, in chronological order.
-          </p>
+          <h2>Activity</h2>
         </div>
         <Activity size={18} />
       </div>
@@ -1560,11 +1454,9 @@ export function ActivityPanel({ data }: { data: Snapshot }) {
                   <time>{date(event.created_at)}</time>
                 </div>
                 <h3>{event.description || words(event.event_type)}</h3>
-                <small>
-                  {event.actor} · Event #{event.id}
-                </small>
+                <small>{event.actor}</small>
                 <details className="obs-details">
-                  <summary>Entity and structured details</summary>
+                  <summary>Record details</summary>
                   <p>
                     {event.entity_id
                       ? `Linked entity: ${event.entity_id}`
@@ -1577,10 +1469,7 @@ export function ActivityPanel({ data }: { data: Snapshot }) {
           ))}
         </div>
       ) : (
-        <Empty title="No matching activity">
-          Research events appear as agents register hypotheses, execute
-          experiments, and record findings.
-        </Empty>
+        <Empty title="No matching activity">Try another filter.</Empty>
       )}
     </section>
   );
@@ -1639,10 +1528,7 @@ export function ReviewPanel({
     <section className="obs-card">
       <div className="obs-card-heading">
         <div>
-          <h2>Researcher review</h2>
-          <p className="obs-muted">
-            Only an authorized researcher can approve or reject these requests.
-          </p>
+          <h2>Review requests</h2>
         </div>
         <label className="obs-inline-label">
           Show

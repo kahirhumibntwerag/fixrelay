@@ -173,8 +173,11 @@ export function numeric(value: unknown): string {
         ? Number(value)
         : NaN;
   return Number.isFinite(number)
-    ? new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(
-        number,
-      )
+    ? new Intl.NumberFormat(
+        undefined,
+        number !== 0 && Math.abs(number) < 0.01
+          ? { maximumSignificantDigits: 4 }
+          : { maximumFractionDigits: 4 },
+      ).format(number)
     : "—";
 }
