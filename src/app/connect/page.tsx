@@ -65,7 +65,7 @@ export default async function Connect() {
         [
           "create_campaign / get_campaign / list_campaigns",
           "Define the research question",
-          "Register a measurable objective, primary metric, baseline, target, evaluation protocol, constraints and stop conditions. New observatory campaigns are private and belong to your signed-in account.",
+          "Register a measurable objective and one or more metrics, each with its own target and evaluation method. New campaigns are private and belong to your account. Use register_metric to add another metric later.",
         ],
         [
           "create_hypothesis / list_hypotheses / get_hypothesis",
@@ -101,6 +101,16 @@ export default async function Connect() {
           "get_research_context / list_experiments / get_experiment",
           "Resume with bounded context",
           "Start with the compact campaign summary, then load one page or selected evidence section. Full details use bounded JSON fragments and next_offset pagination.",
+        ],
+        [
+          "upload_chart / list_charts / list_public_charts",
+          "Keep charts with your findings",
+          "Upload PNG, JPEG, or WebP charts up to 2 MiB, with captions and optional metric or experiment links. Charts appear in the overview and stay private until selected for publication.",
+        ],
+        [
+          "publish_campaign",
+          "Share selected research",
+          "An authenticated campaign owner with research write access can publish selected completed experiments and chart_ids. Unselected experiments and charts remain private. Only publish when the researcher has authorized sharing.",
         ],
         [
           "search_public_campaigns / search_public_experiments",
@@ -145,8 +155,8 @@ export default async function Connect() {
         screen and resource-bound access tokens. Clients that support manual
         Authorization headers can also use an agent credential from{" "}
         <Link href="/settings">Settings</Link>. OAuth access follows your
-        campaign permissions and cannot approve researcher reviews or publish
-        private campaigns.
+        campaign permissions. Research write access allows owners to publish
+        selected findings; agents cannot approve researcher reviews.
       </p>
       <Link className="text-link" href="/observatory">
         Open the research observatory <ArrowRight size={16} />

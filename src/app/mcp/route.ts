@@ -17,6 +17,7 @@ import { oauthChallenge } from "@/lib/oauth";
 import { researchToolScope, toolSecuritySchemes } from "@/lib/mcp-auth";
 export const runtime = "nodejs";
 export const maxDuration = 60;
+const maxMcpBodySize = 3 * 1024 * 1024;
 const handler = createMcpHandler(
   ({ requestInfo, authInfo }) => {
     if (!requestInfo) throw new Error("HTTP request context is required");
@@ -31,7 +32,11 @@ const handler = createMcpHandler(
     );
     return server;
   },
-  { legacy: "stateless", responseMode: "json", maxRequestBodySize: 100000 },
+  {
+    legacy: "stateless",
+    responseMode: "json",
+    maxRequestBodySize: maxMcpBodySize,
+  },
 );
 function allowedHosts(request: Request) {
   const values = [
@@ -72,7 +77,7 @@ async function serve(request: Request) {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > 100000) {
+      if (size > maxMcpBodySize) {
         await reader.cancel();
         return Response.json({ error: "Request too large" }, { status: 413 });
       }
@@ -86,13 +91,17 @@ async function serve(request: Request) {
     } catch {
       return Response.json({ error: "Invalid JSON" }, { status: 400 });
     }
+    const params = body?.params as { name?: unknown } | undefined;
+    const isChartUpload =
+      body?.method === "tools/call" && params?.name === "upload_chart";
+    if (!isChartUpload && size > 100000)
+      return Response.json({ error: "Request too large" }, { status: 413 });
     checked = new Request(request.url, {
       method: "POST",
       headers: request.headers,
       body: bytes,
       signal: request.signal,
     });
-    const params = body?.params as { name?: unknown } | undefined;
     const scope =
       body?.method === "tools/call" && typeof params?.name === "string"
         ? researchToolScope(params.name)

@@ -20,9 +20,9 @@ const permissions: Record<string, { title: string; description: string }> = {
       "Read private campaigns, hypotheses, experiments and evidence you can access.",
   },
   "research:write": {
-    title: "Record research on your behalf",
+    title: "Record and publish research on your behalf",
     description:
-      "Create campaigns, register experiments, record evidence and request researcher review within your workspace permissions.",
+      "Create campaigns, register metrics and experiments, upload charts, record evidence and request review. Campaign owners can publish selected completed experiments and charts.",
   },
   offline_access: {
     title: "Keep the connection available",
@@ -113,8 +113,9 @@ export function OAuthConsent({
         </p>
       )}
       <div className="oauth-boundary">
-        The application cannot approve researcher reviews or publish private
-        campaigns. You keep control of those actions in the dashboard.
+        The application cannot approve researcher reviews. Write access allows
+        owner-authorized publication of selected findings; unselected records
+        stay private. You can revoke access in Settings.
       </div>
       <details className="oauth-client-details">
         <summary>Application connection details</summary>

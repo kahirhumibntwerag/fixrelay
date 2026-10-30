@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   ArrowRight,
@@ -22,8 +22,13 @@ import {
   type Experiment,
   type Hypothesis,
   type Observation,
+  type ResearchChart,
   type Snapshot,
 } from "./types";
+
+import { MetricsPanel } from "./metrics-panel";
+import { ChartsPanel } from "./charts-panel";
+import { formatResearchText } from "@/lib/research-text";
 
 export function Badge({ status }: { status?: string | null }) {
   return (
@@ -43,7 +48,9 @@ function Empty({
     <div className="obs-panel-empty">
       <FlaskConical size={25} />
       <h3>{title}</h3>
-      <p>{children}</p>
+      <p>
+        {typeof children === "string" ? formatResearchText(children) : children}
+      </p>
     </div>
   );
 }
@@ -57,7 +64,9 @@ function DataText({
   return children ? (
     <div className="obs-data-text">
       <span>{label}</span>
-      <p>{children}</p>
+      <p>
+        {typeof children === "string" ? formatResearchText(children) : children}
+      </p>
     </div>
   ) : null;
 }
@@ -129,7 +138,6 @@ export function OverviewPanel({
     tab: "overview" | "hypotheses" | "experiments" | "activity" | "review",
   ) => void;
 }) {
-  const metric = data.metrics[0];
   const active = data.runs.filter((run) => run.status === "running");
   const stale = active.filter((run) => run.stale);
   const pending = data.reviews.filter((review) => review.status === "pending");
@@ -151,16 +159,6 @@ export function OverviewPanel({
     data.summary.active_experiments > 0 ? active.at(-1) : latestRun;
   const latestFailure = latestRun?.status === "failed" ? latestRun : null;
   const hasAttention = pending.length > 0 || stale.length > 0;
-  const hasMeasurements = data.observations.some(
-    (observation) =>
-      observation.metric_id === metric?.id &&
-      observation.value != null &&
-      observation.unit === metric?.unit &&
-      observation.conditions_key === metric?.evaluation_protocol &&
-      data.runs.some(
-        (run) => run.id === observation.run_id && run.status === "completed",
-      ),
-  );
   const state =
     !runsTruncated && active.length && active.length === stale.length
       ? "Waiting for an agent update"
@@ -180,7 +178,7 @@ export function OverviewPanel({
           <span className="obs-eyebrow">Research question</span>
           <span className="obs-private">{data.campaign.visibility}</span>
         </div>
-        <h2>{data.campaign.question}</h2>
+        <h2>{formatResearchText(data.campaign.question)}</h2>
         <div className="obs-current-state" role="status">
           <strong>{state}</strong>
           {data.summary.pending_reviews > 0 ? (
@@ -210,75 +208,23 @@ export function OverviewPanel({
             </button>
           ) : null}
         </div>
-        {metric && (
-          <div className="obs-objective-metrics obs-overview-metrics">
-            <div>
-              <span>Metric</span>
-              <strong>{words(metric.name)}</strong>
-            </div>
-            <div>
-              <span>
-                Target ·{" "}
-                {metric.direction === "range"
-                  ? "within range"
-                  : metric.direction === "minimize"
-                    ? "lower is better"
-                    : "higher is better"}
-              </span>
-              <strong>
-                {numeric(metric.target)}
-                {metric.direction === "range"
-                  ? ` – ${numeric(metric.target_max)}`
-                  : ""}
-                <small>
-                  {metric.unit === "dimensionless" ? "" : metric.unit}
-                </small>
-              </strong>
-            </div>
-            <div>
-              <span>Best result</span>
-              <strong>
-                {data.summary.best_result == null
-                  ? "Not available"
-                  : numeric(data.summary.best_result)}
-                {data.summary.best_result != null && (
-                  <small>
-                    {metric.unit === "dimensionless" ? "" : metric.unit}
-                  </small>
-                )}
-              </strong>
-            </div>
-          </div>
-        )}
         <details className="obs-details">
           <summary>Research plan</summary>
           <DataText label="Objective">
             {data.campaign.objective || data.campaign.summary}
           </DataText>
-          {metric && (
-            <>
-              <DataText label="Evaluation method">
-                {metric.evaluation_protocol}
-              </DataText>
-              {metric.baseline != null && (
-                <DataText label="Baseline">
-                  {numeric(metric.baseline)}{" "}
-                  {metric.unit === "dimensionless" ? "" : metric.unit}
-                </DataText>
-              )}
-            </>
-          )}
           <DataText label="Constraints">{data.campaign.constraints}</DataText>
           <DataText label="When to stop">
             {data.campaign.stop_conditions}
           </DataText>
-          {data.summary.best_verified_result != null && (
-            <DataText label="Best reproduced result">
-              {numeric(data.summary.best_verified_result)} {metric?.unit}
-            </DataText>
-          )}
         </details>
       </section>
+      <MetricsPanel
+        data={data}
+        onUpdated={onUpdated}
+        onInspectExperiment={onInspectExperiment}
+      />
+      <ChartsPanel data={data} onUpdated={onUpdated} />
       {hasAttention && (
         <section className="obs-card">
           <div className="obs-card-heading">
@@ -358,7 +304,7 @@ export function OverviewPanel({
             <h2>Latest conclusion</h2>
             <Badge status={latestDecision.outcome} />
           </div>
-          <p>{latestDecision.rationale}</p>
+          <p>{formatResearchText(latestDecision.rationale)}</p>
           <details className="obs-details">
             <summary>Evidence and next step</summary>
             <EvidenceLinks ids={latestDecision.evidence_ids} data={data} />
@@ -370,9 +316,6 @@ export function OverviewPanel({
             </small>
           </details>
         </section>
-      )}
-      {hasMeasurements && (
-        <MetricTrend data={data} onInspectExperiment={onInspectExperiment} />
       )}
       <SharingPanel data={data} onUpdated={onUpdated} />
     </div>
@@ -395,12 +338,43 @@ function SharingPanel({
     [error, setError] = useState(""),
     [success, setSuccess] = useState(false);
   const [attempt, setAttempt] = useState({ payload: "", key: "" });
+  const [charts, setCharts] = useState<ResearchChart[]>([]);
+  const [selectedCharts, setSelectedCharts] = useState<string[]>([]);
+  const [loadingCharts, setLoadingCharts] = useState(false);
+  const [sharingOpen, setSharingOpen] = useState(false);
+  const chartEventVersion = data.events.at(-1)?.id;
+  const loadCharts = useCallback(async () => {
+    setLoadingCharts(true);
+    try {
+      const response = await fetch(
+        `/api/research/charts?campaign_id=${encodeURIComponent(data.campaign.id)}`,
+        { cache: "no-store" },
+      );
+      const body = await response.json();
+      if (!response.ok)
+        throw new Error(body.error || "Unable to load charts for publication.");
+      setCharts(body.charts || []);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Unable to load charts.",
+      );
+    } finally {
+      setLoadingCharts(false);
+    }
+  }, [data.campaign.id]);
+  useEffect(() => {
+    if (sharingOpen) void loadCharts();
+  }, [sharingOpen, loadCharts, chartEventVersion]);
   async function publish(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setError("");
     setSuccess(false);
-    const input = { campaign_id: data.campaign.id, experiment_ids: selected },
+    const input = {
+        campaign_id: data.campaign.id,
+        experiment_ids: selected,
+        chart_ids: selectedCharts,
+      },
       payload = JSON.stringify(input);
     const key = attempt.payload === payload ? attempt.key : crypto.randomUUID();
     setAttempt({ payload, key });
@@ -419,6 +393,7 @@ function SharingPanel({
         throw new Error(body.error || "Unable to publish findings.");
       setSuccess(true);
       setSelected([]);
+      setSelectedCharts([]);
       setAcknowledged(false);
       onUpdated();
     } catch (cause) {
@@ -431,7 +406,11 @@ function SharingPanel({
   }
   return (
     <section className="obs-card">
-      <details>
+      <details
+        onToggle={(event) => {
+          setSharingOpen(event.currentTarget.open);
+        }}
+      >
         <summary className="obs-share-heading">
           <span>
             <ShieldCheck size={18} />
@@ -439,7 +418,7 @@ function SharingPanel({
           </span>
         </summary>
         <p className="obs-muted">
-          Selected experiments and the campaign summary will be public,
+          Selected experiments, charts, and the campaign summary will be public,
           including methods, observations, evidence, and limitations. Review
           them for private information before publishing. Run configurations and
           activity remain private.
@@ -454,6 +433,14 @@ function SharingPanel({
                     checked={selected.includes(experiment.id)}
                     onChange={(event) => {
                       setSuccess(false);
+                      if (!event.target.checked)
+                        setSelectedCharts((items) =>
+                          items.filter(
+                            (id) =>
+                              charts.find((chart) => chart.id === id)
+                                ?.experiment_id !== experiment.id,
+                          ),
+                        );
                       setSelected((items) =>
                         event.target.checked
                           ? [...items, experiment.id]
@@ -470,6 +457,42 @@ function SharingPanel({
                 </label>
               ))}
             </div>
+            {loadingCharts && <p role="status">Loading charts…</p>}
+            {charts.length > 0 && (
+              <div className="obs-share-list">
+                <h3>Charts</h3>
+                {charts.map((chart) => {
+                  const canSelect =
+                    !chart.experiment_id ||
+                    selected.includes(chart.experiment_id) ||
+                    !!chart.published_at;
+                  return (
+                    <label key={chart.id}>
+                      <input
+                        type="checkbox"
+                        checked={selectedCharts.includes(chart.id)}
+                        disabled={!canSelect}
+                        onChange={(event) =>
+                          setSelectedCharts((items) =>
+                            event.target.checked
+                              ? [...items, chart.id]
+                              : items.filter((id) => id !== chart.id),
+                          )
+                        }
+                      />
+                      <span>
+                        {chart.title}
+                        <small>
+                          {canSelect
+                            ? "Include this chart"
+                            : "Select its experiment above to include this chart"}
+                        </small>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
             <label className="obs-share-acknowledgement">
               <input
                 type="checkbox"
@@ -478,8 +501,8 @@ function SharingPanel({
                 onChange={(event) => setAcknowledged(event.target.checked)}
               />
               <span>
-                I reviewed the selected experiments and campaign summary and
-                approve making them public.
+                I reviewed the selected experiments, charts, and campaign
+                summary and approve making them public.
               </span>
             </label>
             {error && (
@@ -497,11 +520,17 @@ function SharingPanel({
             )}
             <div className="obs-form-actions">
               <span className="obs-muted">
-                {selected.length} experiments selected
+                {selected.length} experiments · {selectedCharts.length} charts
+                selected
               </span>
               <button
                 className="obs-button obs-primary"
-                disabled={busy || !selected.length || !acknowledged}
+                disabled={
+                  busy ||
+                  (!selected.length && !selectedCharts.length) ||
+                  !acknowledged ||
+                  loadingCharts
+                }
               >
                 {busy ? "Publishing…" : "Publish selected findings"}
                 <ArrowUpRight size={14} />
@@ -514,222 +543,6 @@ function SharingPanel({
           </p>
         )}
       </details>
-    </section>
-  );
-}
-
-function MetricTrend({
-  data,
-  onInspectExperiment,
-}: {
-  data: Snapshot;
-  onInspectExperiment: (id: string) => void;
-}) {
-  const metric = data.metrics[0];
-  const observations = useMemo(
-    () =>
-      data.observations.filter(
-        (observation) =>
-          observation.metric_id === metric?.id &&
-          observation.value != null &&
-          observation.unit === metric?.unit &&
-          observation.conditions_key === metric?.evaluation_protocol &&
-          data.runs.some(
-            (run) =>
-              run.id === observation.run_id && run.status === "completed",
-          ),
-      ),
-    [data, metric?.id],
-  );
-  const conditions = [
-    ...new Set(observations.map((observation) => observation.conditions_key!)),
-  ];
-  const [selected, setSelected] = useState("");
-  const condition = conditions.includes(selected) ? selected : conditions[0];
-  const points = observations
-    .filter((observation) => observation.conditions_key === condition)
-    .sort((a, b) => a.created_at.localeCompare(b.created_at));
-  const values = points.map((observation) => Number(observation.value));
-  if (metric?.baseline != null) values.push(Number(metric.baseline));
-  if (metric) values.push(Number(metric.target));
-  const low = Math.min(...values),
-    high = Math.max(...values),
-    padding = Math.max((high - low) * 0.18, Math.abs(high) * 0.02, 0.01);
-  const y = (value: number) =>
-    160 - ((value - low + padding) / (high - low + 2 * padding)) * 130;
-  const x = (index: number) =>
-    55 + index * (650 / Math.max(points.length - 1, 1));
-  return (
-    <section className="obs-card">
-      <div className="obs-card-heading">
-        <div>
-          <h2>Evidence trend</h2>
-          <p className="obs-muted">
-            {metric
-              ? `${metric.name} · ${metric.unit || "unitless"} · completed runs with matching evaluation conditions`
-              : "Comparable measurements over time"}
-          </p>
-        </div>
-        {conditions.length > 1 && (
-          <label className="obs-inline-label">
-            Conditions
-            <select
-              value={condition}
-              onChange={(event) => setSelected(event.target.value)}
-            >
-              {conditions.map((key) => (
-                <option key={key} value={key}>
-                  {key}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </div>
-      {metric && points.length > 0 ? (
-        <>
-          <div
-            className="obs-chart"
-            role="img"
-            aria-label={`${metric.name} over ${points.length} comparable observations. Baseline ${metric.baseline ?? "unavailable"}; target ${metric.target}.`}
-          >
-            <svg viewBox="0 0 800 200">
-              <line x1="50" x2="720" y1="170" y2="170" stroke="#333b43" />
-              {metric.baseline != null && (
-                <g>
-                  <line
-                    x1="50"
-                    x2="720"
-                    y1={y(Number(metric.baseline))}
-                    y2={y(Number(metric.baseline))}
-                    stroke="#84909c"
-                    strokeDasharray="5 5"
-                  />
-                  <text
-                    x="730"
-                    y={y(Number(metric.baseline)) + 4}
-                    fill="#99a1ab"
-                    fontSize="11"
-                  >
-                    Baseline
-                  </text>
-                </g>
-              )}
-              <g>
-                <line
-                  x1="50"
-                  x2="720"
-                  y1={y(Number(metric.target))}
-                  y2={y(Number(metric.target))}
-                  stroke="#b5ed83"
-                  strokeDasharray="5 5"
-                />
-                <text
-                  x="730"
-                  y={y(Number(metric.target)) + 4}
-                  fill="#b5ed83"
-                  fontSize="11"
-                >
-                  Target
-                </text>
-              </g>
-              <polyline
-                points={points
-                  .map(
-                    (point, index) => `${x(index)},${y(Number(point.value))}`,
-                  )
-                  .join(" ")}
-                fill="none"
-                stroke="#b5ed83"
-                strokeWidth="2.5"
-              />
-              {points.map((point, index) => (
-                <g key={point.id}>
-                  <circle
-                    cx={x(index)}
-                    cy={y(Number(point.value))}
-                    r="4"
-                    fill="#b5ed83"
-                  />
-                  <text
-                    x={x(index)}
-                    y={y(Number(point.value)) - 12}
-                    textAnchor="middle"
-                    fill="#eef0f2"
-                    fontSize="12"
-                  >
-                    {numeric(point.value)}
-                  </text>
-                  <text
-                    x={x(index)}
-                    y="190"
-                    textAnchor="middle"
-                    fill="#87919b"
-                    fontSize="10"
-                  >
-                    {index + 1}
-                  </text>
-                </g>
-              ))}
-            </svg>
-          </div>
-          <p className="obs-chart-note">
-            Evaluation conditions: <code>{condition}</code>. Different
-            conditions are shown as separate series; they do not establish a
-            fair comparison.
-          </p>
-          <div className="obs-evidence-table">
-            <table>
-              <caption className="obs-sr-only">
-                Comparable completed measurements
-              </caption>
-              <thead>
-                <tr>
-                  <th>Measurement</th>
-                  <th>Experiment</th>
-                  <th>Sample size</th>
-                  <th>Uncertainty</th>
-                </tr>
-              </thead>
-              <tbody>
-                {points.map((point) => {
-                  const run = data.runs.find(
-                    (item) => item.id === point.run_id,
-                  );
-                  return (
-                    <tr key={point.id}>
-                      <td>
-                        <button
-                          className="obs-link-button"
-                          onClick={() =>
-                            run && onInspectExperiment(run.experiment_id)
-                          }
-                        >
-                          {numeric(point.value)} {point.unit || metric.unit}
-                        </button>
-                      </td>
-                      <td>
-                        {data.experiments.find(
-                          (item) => item.id === run?.experiment_id,
-                        )?.title || "—"}
-                      </td>
-                      <td>{point.sample_size ?? "Not reported"}</td>
-                      <td>{point.uncertainty || "Not reported"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
-      ) : (
-        <Empty title="Comparable evidence will appear here">
-          Record a numerical observation with a metric definition and an
-          evaluation conditions key matching the registered evaluation protocol,
-          then complete its run. Unmatched or incomplete measurements remain
-          available in experiment details.
-        </Empty>
-      )}
     </section>
   );
 }

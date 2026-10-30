@@ -4,6 +4,7 @@ export const publicResearchTools = new Set([
   "get_public_campaign",
   "search_public_experiments",
   "get_public_experiment",
+  "list_public_charts",
   "list_reproduction_reports",
   "get_reproduction_report",
   "search_solutions",
@@ -19,9 +20,13 @@ const privateReads = new Set([
   "list_experiments",
   "get_experiment",
   "get_review_status",
+  "list_charts",
 ]);
 const privateWrites = new Set([
   "create_campaign",
+  "register_metric",
+  "publish_campaign",
+  "upload_chart",
   "create_hypothesis",
   "propose_experiment",
   "start_experiment_run",

@@ -5,9 +5,12 @@ import { connectResearch, runSyntheticScenario, toolData } from "./demo-research
 const base = process.argv[2] || "http://localhost:3000";
 const origin = new URL(base).origin;
 if (!["localhost", "127.0.0.1", "[::1]"].includes(new URL(base).hostname) && process.env.ALLOW_REMOTE_RESEARCH_TEST !== "1") throw new Error("Run this write-based integration suite against a disposable local database. Set ALLOW_REMOTE_RESEARCH_TEST=1 only for a dedicated remote test deployment.");
+// Isolate disposable local fixtures from other suites' per-IP sign-up quotas.
+const localTestHeaders = ["localhost", "127.0.0.1", "[::1]"].includes(new URL(base).hostname)
+  ? { "x-forwarded-for": `127.${randomBytes(1)[0]}.${randomBytes(1)[0]}.${Math.max(1, randomBytes(1)[0])}` } : {};
 const password = randomBytes(24).toString("base64url");
 async function account(label) {
-  const response = await fetch(`${base}/api/auth/sign-up/email`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: JSON.stringify({ name: `SYNTHETIC ${label}`, email: `rognet-${randomUUID()}@example.test`, password }) });
+  const response = await fetch(`${base}/api/auth/sign-up/email`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin, ...localTestHeaders }, body: JSON.stringify({ name: `SYNTHETIC ${label}`, email: `rognet-${randomUUID()}@example.test`, password }) });
   const result = await response.json();
   assert.equal(response.status, 200, `Test account creation failed: ${JSON.stringify(result)}`);
   const cookies = response.headers.getSetCookie().map(c => c.split(";")[0]).join("; ");
@@ -15,7 +18,7 @@ async function account(label) {
   return { cookie: cookies, id: result.user.id };
 }
 async function humanJson(path, session, method = "GET", body) {
-  const response = await fetch(`${base}${path}`, { method, headers: { Cookie: session.cookie, Origin: origin, "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const response = await fetch(`${base}${path}`, { method, headers: { Cookie: session.cookie, Origin: origin, "Content-Type": "application/json", ...localTestHeaders }, body: body === undefined ? undefined : JSON.stringify(body) });
   return { response, data: await response.json() };
 }
 async function key(session, campaignId = null) {
@@ -48,7 +51,7 @@ try {
   const credential = await key(researcher);
   const client = await connectResearch(base, credential.token, "rognet-integration-test"); clients.push(client);
   const tools = await client.listTools();
-  for (const name of ["create_campaign", "get_campaign", "list_campaigns", "get_research_context", "create_hypothesis", "list_hypotheses", "get_hypothesis", "propose_experiment", "start_experiment_run", "report_run_progress", "complete_experiment_run", "list_experiments", "get_experiment", "record_observation", "record_analysis", "record_scientific_decision", "propose_next_step", "request_human_review", "get_review_status", "record_artifact", "submit_reproduction", "search_public_campaigns", "get_public_campaign", "search_public_experiments", "get_public_experiment", "list_reproduction_reports", "get_reproduction_report", "search_solutions", "get_solution"]) assert(tools.tools.some(t => t.name === name), `Missing ${name}`);
+  for (const name of ["create_campaign", "register_metric", "publish_campaign", "get_campaign", "list_campaigns", "get_research_context", "create_hypothesis", "list_hypotheses", "get_hypothesis", "propose_experiment", "start_experiment_run", "report_run_progress", "complete_experiment_run", "list_experiments", "get_experiment", "record_observation", "record_analysis", "record_scientific_decision", "propose_next_step", "request_human_review", "get_review_status", "record_artifact", "submit_reproduction", "search_public_campaigns", "get_public_campaign", "search_public_experiments", "get_public_experiment", "list_reproduction_reports", "get_reproduction_report", "search_solutions", "get_solution"]) assert(tools.tools.some(t => t.name === name), `Missing ${name}`);
   assert(!tools.tools.some(t => t.name === "review_request"), "Agent tool surface must not expose review approval");
   const resources = await client.listResources(); assert(resources.resources.some(r => r.uri === "rognet://research/workflow"));
   console.log("PASS: authenticated MCP v2 discovery, read-only workflow resource, unauthorized API denial");
@@ -136,7 +139,7 @@ try {
   const recovered = toolData(await reconnected.callTool({ name: "get_campaign", arguments: scope })); assert.equal(recovered.campaign.id, scenario.campaign.id);
   console.log("PASS: campaign-scoped credentials, credential revocation, live SSE delivery and fresh-client persistence");
   const agentPublish = await fetch(`${base}/api/research`, { method: "POST", headers: { Authorization: `Bearer ${credential.token}`, "Content-Type": "application/json" }, body: JSON.stringify({ action: "publish_campaign", input: { ...scope, experiment_ids: [scenario.experiments[0].id] }, idempotency_key: randomUUID() }) });
-  assert.equal(agentPublish.status, 403);
+  assert.equal(agentPublish.status, 200, "An authorized owner agent may publish selected completed experiments");
   const publication = await humanJson("/api/research", researcher, "POST", { action: "publish_campaign", input: { ...scope, experiment_ids: [scenario.experiments[0].id] }, idempotency_key: randomUUID() });
   assert.equal(publication.response.status, 200, JSON.stringify(publication.data));
   const publicView = toolData(await anonymous.callTool({ name: "get_public_campaign", arguments: scope }));
@@ -160,7 +163,7 @@ try {
   await rejected(client, "submit_reproduction", { ...reproduction, ...scope, idempotency_key: randomUUID() }, 403);
   const visibleReports = toolData(await anonymous.callTool({ name: "list_reproduction_reports", arguments: { experiment_id: scenario.experiments[0].id } })); assert.equal(visibleReports.items.length, 2);
   const exactReport = toolData(await anonymous.callTool({ name: "get_reproduction_report", arguments: { report_id: publishedReport.id } })); assert.equal(JSON.parse(exactReport.content).result, "reproduced");
-  console.log("PASS: human-only selective publication, private reproduction isolation, independent-account reports, stable contributor counts across keys, and own-campaign reproduction denial");
+  console.log("PASS: owner-authorized selective publication, private reproduction isolation, independent-account reports, stable contributor counts across keys, and own-campaign reproduction denial");
   const foreignOrigin = await fetch(`${base}/mcp`, { method: "POST", headers: { "Content-Type": "application/json", Origin: "https://untrusted.invalid" }, body: "{}" }); assert.equal(foreignOrigin.status, 403);
   const tooLarge = await fetch(`${base}/mcp`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ padding: "x".repeat(100001) }) }); assert.equal(tooLarge.status, 413);
   console.log("PASS: MCP Origin protection and bounded request bodies");

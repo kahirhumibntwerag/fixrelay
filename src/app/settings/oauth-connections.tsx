@@ -17,7 +17,7 @@ const scopes: Record<string, string> = {
   profile: "Basic profile",
   offline_access: "Refresh access",
   "research:read": "Read research",
-  "research:write": "Record research",
+  "research:write": "Record and publish research",
 };
 
 export function OAuthConnections() {
@@ -124,8 +124,9 @@ export function OAuthConnections() {
         </p>
       )}
       <p className="oauth-connections-note">
-        OAuth applications inherit your campaign permissions. Human review and
-        publication actions stay under your control.
+        OAuth applications inherit your campaign permissions. Write access lets
+        owners publish selected findings; agents cannot approve researcher
+        reviews.
       </p>
       <p>
         <Link href="/connect">How to connect a plugin →</Link>

@@ -15,6 +15,9 @@
     "test:research": "node scripts/test-research.mjs",
     "test:auth": "node scripts/test-auth.mjs",
     "test:metrics": "node --experimental-strip-types scripts/test-research-metrics.mjs",
+    "test:charts": "node scripts/test-charts.mjs",
+    "test:research-publishing": "node scripts/test-research-publishing-metrics.mjs",
+    "test:research-text": "node --experimental-strip-types scripts/test-research-text.mjs",
     "demo:research": "node scripts/demo-research.mjs",
     "test:oauth": "node --env-file=.env.local scripts/test-oauth.mjs"
   },

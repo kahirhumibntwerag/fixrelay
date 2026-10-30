@@ -27,6 +27,15 @@ const reviewFields = {
   impact: optionalText,
   costs: optionalText,
 };
+const metricSchema = z.object({
+  name: short,
+  unit: z.string().max(80).default(""),
+  direction: z.enum(["maximize", "minimize", "range"]),
+  baseline: z.number().finite().optional(),
+  target: z.number().finite(),
+  target_max: z.number().finite().optional(),
+  evaluation_protocol: text,
+});
 export const researchSchemas = {
   create_campaign: z.object({
     title: short.min(4),
@@ -35,23 +44,18 @@ export const researchSchemas = {
     objective: text,
     constraints: optionalText,
     stop_conditions: optionalText,
-    metric: z.object({
-      name: short,
-      unit: z.string().max(80).default(""),
-      direction: z.enum(["maximize", "minimize", "range"]),
-      baseline: z.number().finite().optional(),
-      target: z.number().finite(),
-      target_max: z.number().finite().optional(),
-      evaluation_protocol: text,
-    }),
+    metric: metricSchema.optional(),
+    metrics: z.array(metricSchema).min(1).max(20).optional(),
   }),
+  register_metric: z.object({ ...scoped, metric: metricSchema }),
   claim_campaign: z.object({
     ...scoped,
     access_token: z.string().min(24).max(200),
   }),
   publish_campaign: z.object({
     ...scoped,
-    experiment_ids: z.array(uuid).min(1).max(100),
+    experiment_ids: z.array(uuid).max(100).default([]),
+    chart_ids: z.array(uuid).max(30).default([]),
   }),
   submit_reproduction: z.object({
     ...scoped,
@@ -336,11 +340,39 @@ export async function mutateResearch(
       "Only a signed-in human researcher can approve or reject reviews",
       403,
     );
-  if (action === "publish_campaign" && principal.kind !== "human")
+  if (action === "create_campaign" && !!p.metric === !!p.metrics)
+    throw new ResearchError("Provide either metric or metrics, but not both");
+  if (
+    action === "publish_campaign" &&
+    !p.experiment_ids.length &&
+    !p.chart_ids.length
+  )
     throw new ResearchError(
-      "Only a signed-in human owner can publish private findings",
-      403,
+      "Select at least one completed experiment or chart to publish",
     );
+  const requestedMetrics =
+    action === "create_campaign"
+      ? p.metrics || [p.metric]
+      : action === "register_metric"
+        ? [p.metric]
+        : [];
+  if (
+    new Set(
+      requestedMetrics.map((metric: Record<string, any>) =>
+        metric.name.toLowerCase(),
+      ),
+    ).size !== requestedMetrics.length
+  )
+    throw new ResearchError("Metric names must be distinct within a campaign");
+  for (const metric of requestedMetrics) {
+    if (
+      metric.direction === "range" &&
+      (metric.target_max === undefined || metric.target_max < metric.target)
+    )
+      throw new ResearchError(
+        "Range goals require target_max greater than or equal to target",
+      );
+  }
   if (
     (action === "create_campaign" || action === "claim_campaign") &&
     principal.kind === "agent" &&
@@ -421,14 +453,6 @@ export async function mutateResearch(
     let description = "";
     let entityId = campaignId;
     if (action === "create_campaign") {
-      if (
-        p.metric.direction === "range" &&
-        (p.metric.target_max === undefined ||
-          p.metric.target_max < p.metric.target)
-      )
-        throw new ResearchError(
-          "Range goals require target_max greater than or equal to target",
-        );
       const owner = createHash("sha256").update(randomBytes(32)).digest("hex");
       const { rows } = await sql.query(
         `INSERT INTO campaigns(title,question,summary,objective,constraints,stop_conditions,owner_hash,fingerprint)
@@ -450,26 +474,68 @@ export async function mutateResearch(
         `INSERT INTO research_campaign_members(campaign_id,user_id,role) VALUES($1,$2,'owner')`,
         [campaignId, principal.userId],
       );
-      const metric = await sql.query(
-        `INSERT INTO research_metrics(campaign_id,name,unit,direction,baseline,target,target_max,evaluation_protocol)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-        [
-          campaignId,
-          p.metric.name,
-          p.metric.unit,
-          p.metric.direction,
-          p.metric.baseline ?? null,
-          p.metric.target,
-          p.metric.target_max ?? null,
-          p.metric.evaluation_protocol,
-        ],
-      );
+      const metricIds: string[] = [];
+      for (const metric of requestedMetrics) {
+        const inserted = await sql.query(
+          `INSERT INTO research_metrics(campaign_id,name,unit,direction,baseline,target,target_max,evaluation_protocol,created_at)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,clock_timestamp()) RETURNING id`,
+          [
+            campaignId,
+            metric.name,
+            metric.unit,
+            metric.direction,
+            metric.baseline ?? null,
+            metric.target,
+            metric.target_max ?? null,
+            metric.evaluation_protocol,
+          ],
+        );
+        metricIds.push(inserted.rows[0].id);
+      }
       result = {
         id: campaignId,
-        metric_id: metric.rows[0].id,
+        metric_id: metricIds[0],
+        metric_ids: metricIds,
         visibility: "private",
       };
       description = "Research campaign created: " + p.title;
+    } else if (action === "register_metric") {
+      const existing = await sql.query(
+        "SELECT name FROM research_metrics WHERE campaign_id=$1",
+        [campaignId],
+      );
+      if (existing.rows.length >= 20)
+        throw new ResearchError(
+          "A campaign can register up to 20 metrics",
+          409,
+        );
+      if (
+        existing.rows.some(
+          (metric) => metric.name.toLowerCase() === p.metric.name.toLowerCase(),
+        )
+      )
+        throw new ResearchError(
+          "A metric with that name is already registered",
+          409,
+        );
+      const metric = p.metric;
+      const inserted = await sql.query(
+        `INSERT INTO research_metrics(campaign_id,name,unit,direction,baseline,target,target_max,evaluation_protocol,created_at)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,clock_timestamp()) RETURNING id`,
+        [
+          campaignId,
+          metric.name,
+          metric.unit,
+          metric.direction,
+          metric.baseline ?? null,
+          metric.target,
+          metric.target_max ?? null,
+          metric.evaluation_protocol,
+        ],
+      );
+      entityId = inserted.rows[0].id;
+      result = { id: entityId, metric_id: entityId };
+      description = "Research metric registered: " + metric.name;
     } else if (action === "claim_campaign") {
       if (principal.kind !== "human")
         throw new ResearchError(
@@ -562,6 +628,24 @@ export async function mutateResearch(
           ],
         );
       }
+      const shared = await sql.query(
+        "SELECT id FROM experiments WHERE campaign_id=$1 AND visibility='public' AND status='completed' LIMIT 1",
+        [campaignId],
+      );
+      if (!shared.rows.length)
+        throw new ResearchError(
+          "Publish at least one completed experiment before sharing campaign charts",
+          409,
+        );
+      if (p.chart_ids.length) {
+        const { publishResearchCharts } = await import("./research-charts");
+        await publishResearchCharts(
+          sql,
+          campaignId,
+          p.chart_ids,
+          p.experiment_ids,
+        );
+      }
       await sql.query(`UPDATE campaigns SET visibility='public' WHERE id=$1`, [
         campaignId,
       ]);
@@ -569,9 +653,10 @@ export async function mutateResearch(
         id: campaignId,
         visibility: "public",
         published_experiment_ids: p.experiment_ids,
+        published_chart_ids: p.chart_ids,
       };
       description =
-        "Researcher published selected findings to the shared campaign registry";
+        "Campaign owner published selected findings to the shared campaign registry";
     } else if (action === "submit_reproduction") {
       const target = await sql.query(
         `SELECT id,campaign_id,status FROM experiments WHERE id=$1 AND visibility='public'`,
@@ -1219,35 +1304,44 @@ export async function researchSnapshot(
         [campaignId],
       )
     ).rows[0];
-    let best: Record<string, any> | null = null,
-      verified: Record<string, any> | null = null;
-    if (primary) {
-      const candidates = (
-        await sql.query(
-          `WITH candidates AS (
-        SELECT o.value,r.experiment_id,o.run_id,o.conditions_key,o.created_at,o.id,
+    const metricCandidates = metrics.length
+      ? (
+          await sql.query(
+            `WITH candidates AS (
+        SELECT o.metric_id,o.value,r.experiment_id,o.run_id,o.conditions_key,o.created_at,o.id,
           coalesce(s.reproduced_count,0)>0 AND coalesce(s.not_reproduced_count,0)=0 AS verified,
-          CASE WHEN $5='minimize' THEN o.value WHEN $5='range' THEN greatest($6-o.value,o.value-$7,0) ELSE -o.value END AS sort_value
-        FROM research_observations o JOIN research_runs r ON r.id=o.run_id JOIN experiments e ON e.id=r.experiment_id
+          CASE WHEN m.direction='minimize' THEN o.value WHEN m.direction='range'
+            THEN greatest(m.target-o.value,o.value-coalesce(m.target_max,m.target),0)
+            ELSE -o.value END AS sort_value
+        FROM research_observations o JOIN research_metrics m ON m.id=o.metric_id
+        JOIN research_runs r ON r.id=o.run_id JOIN experiments e ON e.id=r.experiment_id
         LEFT JOIN public_reproduction_summary s ON s.experiment_id=e.id
-        WHERE e.campaign_id=$1 AND r.status='completed' AND o.metric_id=$2 AND o.unit=$3 AND o.conditions_key=$4 AND o.value IS NOT NULL
+        WHERE e.campaign_id=$1 AND m.campaign_id=$1 AND r.status='completed'
+          AND o.unit=m.unit AND o.conditions_key=m.evaluation_protocol AND o.value IS NOT NULL
           AND NOT EXISTS(SELECT 1 FROM research_observations corrected WHERE corrected.supersedes_id=o.id)
-      ) SELECT (SELECT row_to_json(c) FROM candidates c ORDER BY sort_value,created_at,id LIMIT 1) AS best,
-        (SELECT row_to_json(c) FROM candidates c WHERE verified ORDER BY sort_value,created_at,id LIMIT 1) AS reproduced`,
-          [
-            campaignId,
-            primary.id,
-            primary.unit,
-            primary.evaluation_protocol,
-            primary.direction,
-            primary.target,
-            primary.target_max ?? primary.target,
-          ],
-        )
-      ).rows[0];
-      best = candidates.best;
-      verified = candidates.reproduced;
-    }
+      ) SELECT m.id AS metric_id,
+        (SELECT row_to_json(c) FROM candidates c WHERE c.metric_id=m.id ORDER BY sort_value,created_at,id LIMIT 1) AS best_result,
+        (SELECT row_to_json(c) FROM candidates c WHERE c.metric_id=m.id AND verified ORDER BY sort_value,created_at,id LIMIT 1) AS best_verified_result,
+        (SELECT row_to_json(c) FROM candidates c WHERE c.metric_id=m.id ORDER BY created_at DESC,id DESC LIMIT 1) AS latest_result
+      FROM research_metrics m WHERE m.campaign_id=$1 ORDER BY m.created_at,m.id`,
+            [campaignId],
+          )
+        ).rows
+      : [];
+    const metricResults = metrics.map((metric) => {
+      const result = metricCandidates.find(
+        (row) => row.metric_id === metric.id,
+      );
+      return {
+        metric_id: metric.id,
+        best_result: result?.best_result ?? null,
+        best_verified_result: result?.best_verified_result ?? null,
+        latest_result: result?.latest_result ?? null,
+        ...metricProgress(metric, result?.best_result?.value ?? null),
+      };
+    });
+    const best = metricResults[0]?.best_result ?? null;
+    const verified = metricResults[0]?.best_verified_result ?? null;
     await sql.query("COMMIT");
     return {
       campaign,
@@ -1266,6 +1360,7 @@ export async function researchSnapshot(
         ...totals,
         best_result: best,
         best_verified_result: verified,
+        metric_results: metricResults,
         ...(primary
           ? metricProgress(primary, best?.value ?? null)
           : { progress_percent: null, target_gap: null }),

@@ -264,6 +264,8 @@ try {
   assert.equal(toolData(await readonly.callTool({ name: "get_campaign", arguments: scope })).campaign.id, campaign.id);
   await rpcError(readonly, "create_hypothesis", { ...scope, title: "Forbidden OAuth write", statement: "Read scope cannot write.", rationale: "Permission boundary fixture", prediction: "This request is rejected.", idempotency_key: randomUUID() }, 403);
   await rpcError(readonly, "create_campaign", { ...campaignInput, idempotency_key: randomUUID() }, 403);
+  await rpcError(readonly, "register_metric", { ...scope, metric: { name: "Forbidden OAuth metric", direction: "maximize", target: 1, evaluation_protocol: "SYNTHETIC scope denial" }, idempotency_key: randomUUID() }, 403);
+  await rpcError(readonly, "publish_campaign", { ...scope, experiment_ids: [experiment.id], idempotency_key: randomUUID() }, 403);
   const legacyWrite = await request("/mcp/registry", { method: "POST", bearer: readonlyTokens.access_token, headers: { Accept: "application/json, text/event-stream" }, body: { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "create_campaign", arguments: { title: "SYNTHETIC forbidden legacy OAuth write", question: "Can a read-only OAuth token bypass its permissions through the legacy registry?", summary: "This request must be rejected by the shared legacy authorization guard." } } } });
   assert.equal(legacyWrite.data?.result?.isError, true, "Read-only OAuth must not bypass write scopes through legacy tools");
   console.log("PASS: OAuth agent reads/writes, scope enforcement, campaign membership and human-only review enforcement");

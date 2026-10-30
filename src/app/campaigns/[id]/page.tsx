@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCampaign } from "@/lib/campaigns";
 import { type CampaignViewData } from "@/components/campaign-view";
+import { PublicResearchCharts } from "@/components/public-research-charts";
 export const dynamic = "force-dynamic";
 export default async function CampaignPage({
   params,
@@ -28,6 +29,7 @@ export default async function CampaignPage({
         key={`${id}:${offset}`}
         initial={data as unknown as CampaignViewData}
       />
+      <PublicResearchCharts campaignId={id} />
       {offset > 0 && (
         <Link
           className="text-link"

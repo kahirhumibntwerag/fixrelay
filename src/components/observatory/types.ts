@@ -19,6 +19,38 @@ export type Metric = {
   target_max?: number | null;
   evaluation_protocol: string;
 };
+export type MetricResult = {
+  value: number;
+  experiment_id: string;
+  run_id: string;
+  conditions_key: string;
+  created_at: string;
+  id: string;
+  verified?: boolean;
+};
+export type MetricSummary = {
+  metric_id: string;
+  best_result: MetricResult | null;
+  best_verified_result: MetricResult | null;
+  latest_result: MetricResult | null;
+  progress_percent: number | null;
+  target_gap: number | null;
+};
+export type ResearchChart = {
+  id: string;
+  campaign_id: string;
+  experiment_id?: string | null;
+  metric_id?: string | null;
+  title: string;
+  caption?: string | null;
+  url: string;
+  mime_type: string;
+  byte_size: number;
+  sha256?: string;
+  published_at?: string | null;
+  is_public: boolean;
+  created_at: string;
+};
 export type Hypothesis = {
   id: string;
   title: string;
@@ -72,6 +104,7 @@ export type Observation = {
   uncertainty?: string | null;
   evidence?: string | null;
   conditions_key?: string | null;
+  supersedes_id?: string | null;
   created_at: string;
 };
 export type Analysis = {
@@ -151,6 +184,7 @@ export type Snapshot = {
     best_verified_result?: unknown;
     progress_percent?: number | null;
     target_gap?: number | null;
+    metric_results?: MetricSummary[];
   };
 };
 export const words = (text: string | null | undefined) =>

@@ -1,0 +1,229 @@
+.obs-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.obs-metric-card {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 22px;
+  background: #11171c;
+}
+.obs-metric-card > .obs-card-heading h3 {
+  margin: 0;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.obs-metric-card > .obs-card-heading {
+  margin-bottom: 20px;
+}
+.obs-metric-card .obs-subtle-label {
+  flex-shrink: 0;
+}
+.obs-metric-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.obs-metric-values span,
+.obs-metric-values small {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+}
+.obs-metric-values strong {
+  display: block;
+  font-size: 22px;
+  line-height: 1.5;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.obs-metric-values .obs-metric-missing {
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 400;
+}
+.obs-metric-result {
+  color: var(--green);
+}
+.obs-metric-latest {
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--muted);
+}
+.obs-metric-latest strong {
+  color: var(--text);
+  font-weight: 500;
+}
+.obs-metric-graph {
+  margin-top: 18px;
+}
+.obs-metric-graph > label {
+  margin-bottom: 16px;
+}
+.obs-metric-context {
+  color: var(--muted);
+  font-size: 14px;
+}
+.obs-metric-plot {
+  overflow-x: auto;
+}
+.obs-metric-plot svg {
+  display: block;
+  min-width: 500px;
+  width: 100%;
+}
+.obs-metric-plot text {
+  font-size: 14px;
+}
+.obs-metric-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.obs-metric-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.obs-metric-legend span::before {
+  content: "";
+  width: 20px;
+  border-top: 2px solid #83bce5;
+}
+.obs-metric-legend .obs-legend-target::before {
+  border-top: 2px dashed #b5ed83;
+}
+.obs-metric-legend .obs-legend-baseline::before {
+  border-top: 2px dashed #a5b2bd;
+}
+.obs-metric-table-wrap {
+  overflow-x: auto;
+}
+.obs-metric-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.obs-metric-table th {
+  color: var(--muted);
+  font-weight: 500;
+}
+.obs-metric-table th,
+.obs-metric-table td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.obs-metric-table .obs-link-button {
+  font-size: 14px;
+}
+.obs-metric-form,
+.obs-chart-form {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 24px;
+  background: #11171c;
+}
+.obs-metric-form h3,
+.obs-chart-form h3 {
+  margin: 0;
+}
+.obs-upload-hint {
+  color: var(--muted);
+  font-size: 14px;
+}
+.obs-chart-form input[type="file"] {
+  width: 100%;
+  min-width: 0;
+  font-size: 16px;
+}
+.obs-chart-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.obs-chart-gallery figure {
+  margin: 0;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.obs-chart-gallery figure > a {
+  display: block;
+  background: #fff;
+}
+.obs-chart-gallery img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+}
+.obs-chart-gallery figcaption {
+  padding: 18px;
+}
+.obs-chart-gallery figcaption .obs-card-heading {
+  margin-bottom: 10px;
+}
+.obs-chart-gallery h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.obs-chart-gallery figcaption p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  margin: 8px 0;
+}
+.obs-chart-gallery .obs-chart-association {
+  color: var(--muted);
+  font-size: 14px;
+}
+.obs-chart-success {
+  color: #badf9c;
+  font-size: 16px;
+}
+.obs-chart-error {
+  color: #ffb6ad;
+  font-size: 16px;
+}
+.obs-chart-error p {
+  margin: 10px 0;
+}
+.obs-metrics-panel > .obs-card-heading,
+.obs-charts-panel > .obs-card-heading {
+  flex-wrap: wrap;
+  align-items: center;
+}
+@media (max-width: 1150px) {
+  .obs-metric-grid,
+  .obs-chart-gallery {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 650px) {
+  .obs-metric-card,
+  .obs-metric-form,
+  .obs-chart-form {
+    padding: 16px;
+  }
+  .obs-metric-values {
+    gap: 16px;
+  }
+  .obs-metric-values strong {
+    font-size: 20px;
+  }
+  .obs-chart-gallery figcaption {
+    padding: 16px;
+  }
+}
+@media (max-width: 380px) {
+  .obs-metric-values {
+    grid-template-columns: 1fr;
+  }
+}
