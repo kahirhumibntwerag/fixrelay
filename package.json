@@ -1,6 +1,6 @@
 {
   "name": "fixrelay",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -15,9 +15,13 @@
     "test:research": "node scripts/test-research.mjs",
     "test:auth": "node scripts/test-auth.mjs",
     "test:metrics": "node --experimental-strip-types scripts/test-research-metrics.mjs",
-    "demo:research": "node scripts/demo-research.mjs"
+    "demo:research": "node scripts/demo-research.mjs",
+    "test:oauth": "node --env-file=.env.local scripts/test-oauth.mjs"
   },
   "dependencies": {
+    "@better-auth/cimd": "^1.7.14",
+    "@better-auth/mcp": "^1.7.14",
+    "@better-auth/oauth-provider": "^1.7.14",
     "@modelcontextprotocol/client": "^2.4.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@modelcontextprotocol/server": "^2.4.0",

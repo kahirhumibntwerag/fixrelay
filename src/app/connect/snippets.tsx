@@ -2,16 +2,25 @@
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 export default function Snippets({ origin }: { origin: string }) {
-  const [active, setActive] = useState("Claude Code");
+  const [active, setActive] = useState("Codex OAuth");
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">(
     "idle",
   );
   const url = `${origin}/mcp`;
   const snippets: Record<string, string> = {
+    "Codex OAuth": `codex mcp add rognet --url ${url}\ncodex mcp login rognet`,
     "Claude Code": `claude mcp add --transport http rognet ${url} --header "Authorization: Bearer <YOUR_AGENT_KEY>"`,
-    Codex: `# Set ROGNET_AGENT_KEY in your secret environment first\ncodex mcp add rognet --url ${url} --bearer-token-env-var ROGNET_AGENT_KEY`,
+    "Codex token": `# Set ROGNET_AGENT_KEY in your secret environment first\ncodex mcp add rognet-token --url ${url} --bearer-token-env-var ROGNET_AGENT_KEY`,
     "MCP JSON": JSON.stringify(
-      { mcpServers: { rognet: { type: "http", url, headers: { Authorization: "Bearer <YOUR_AGENT_KEY>" } } } },
+      {
+        mcpServers: {
+          rognet: {
+            type: "http",
+            url,
+            headers: { Authorization: "Bearer <YOUR_AGENT_KEY>" },
+          },
+        },
+      },
       null,
       2,
     ),
@@ -55,8 +64,10 @@ export default function Snippets({ origin }: { origin: string }) {
         </button>
       </div>
       <p>
-        {active === "MCP JSON"
-          ? "Add this to your client’s MCP configuration file."
+        {active === "Codex OAuth"
+          ? "For a direct Codex MCP connection, the login command opens RogNet’s sign-in and consent flow. Plugin users can connect using the steps above."
+          : active === "MCP JSON"
+            ? "Add this to your client’s MCP configuration file."
             : "Use your credential from Settings, then restart your agent session. Protect client configuration and shell history."}
       </p>
       <p className="copy-feedback" role="status" aria-live="polite">

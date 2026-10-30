@@ -23,7 +23,14 @@ async function key(session, campaignId = null) {
   assert.equal(response.status, 201, JSON.stringify(data)); return data;
 }
 async function rejected(client, name, args, expectedStatus) {
-  const result = await client.callTool({ name, arguments: args });
+  let result;
+  try { result = await client.callTool({ name, arguments: args }); }
+  catch (error) {
+    const status = error.data?.status || error.status || error.statusCode || (error.name === "UnauthorizedError" ? 401 : error.name === "InsufficientScopeError" ? 403 : undefined);
+    if (!status) throw error;
+    if (expectedStatus) assert.equal(status, expectedStatus, `${name} must reject unauthorized transport requests`);
+    return;
+  }
   assert.equal(result.isError, true, `Expected ${name} to fail`);
   if (expectedStatus) assert.equal(JSON.parse(result.content.find(c => c.type === "text").text).status, expectedStatus);
 }

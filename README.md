@@ -22,7 +22,7 @@ npm run dev
 
 Open [localhost:3000/sign-in](http://localhost:3000/sign-in), create a researcher account and open [Research Observatory](http://localhost:3000/observatory). Create a campaign there or issue an account-wide agent credential in [Settings](http://localhost:3000/settings) and run the demonstration below.
 
-Migrations are additive and transactional. `db/schema.sql` preserves the original registry, `db/auth.sql` creates authentication tables, and `db/observatory.sql` adds research entities. Existing data and public URLs remain in place. Existing campaign tokens can be used by an authenticated human to import a legacy campaign; knowing a public campaign ID is insufficient to claim it.
+Migrations are additive and transactional. `db/schema.sql` preserves the original registry, `db/auth.sql` creates authentication tables, `db/observatory.sql` adds research entities, and `db/oauth.sql` adds the OAuth provider’s durable authorization records and signing keys. Existing data and public URLs remain in place. Existing campaign tokens can be used by an authenticated human to import a legacy campaign; knowing a public campaign ID is insufficient to claim it.
 
 ## Human sign-in and agent credentials
 
@@ -32,16 +32,42 @@ Agents use separate revocable service credentials. Settings displays a new raw c
 
 Keep credentials in a client secret environment or secret store. Do not place credentials in campaign records, source control or URLs. Campaign data and event streams require access checks; key revocation takes effect on subsequent calls and stream polls. Browser mutations check same-origin requests. Authentication and write rate limits are stored in PostgreSQL.
 
-This MVP does not yet include email verification, email-based password recovery, social sign-in, organization invitation UI or MCP OAuth. Email addresses are login identifiers, not verified institutional identities. Browser sign-in and MCP credentials intentionally remain separate flows.
+MCP clients can also connect through OAuth without copying a token. The browser sign-in identifies the human researcher; the separately approved OAuth grant identifies the agent application, with the requested research scopes and the account’s existing campaign permissions. OAuth applications remain agents and cannot approve human review requests or publish private campaigns. Account settings list connected applications and let the researcher revoke access.
+
+This MVP does not yet include email verification, email-based password recovery, social sign-in or organization invitation UI. Email addresses are login identifiers, not verified institutional identities.
 
 ## Connect an agent
 
-The Research Observatory MCP endpoint is `/mcp`. It uses the official [MCP TypeScript SDK v2](https://ts.sdk.modelcontextprotocol.io/v2/), Streamable HTTP and a stateless server factory, with compatibility for older protocol clients. Configure a static bearer header; clients that only support OAuth cannot connect to private research yet.
+The Research Observatory MCP endpoint is `/mcp`. It uses the official [MCP TypeScript SDK v2](https://ts.sdk.modelcontextprotocol.io/v2/), Streamable HTTP and a stateless server factory, with compatibility for older protocol clients. OAuth is the recommended plugin connection. Manual agent bearer credentials remain available for scripts and clients that support custom headers.
+
+### Codex plugin OAuth
+
+1. Open the custom MCP connection form in the plugin settings.
+2. Set the server URL to `https://fixrelay.vercel.app/mcp` (or your own deployment’s `/mcp`).
+3. Choose **OAuth or no authentication**, allowing anonymous public searches and OAuth-protected private tools.
+4. Use automatic discovery and supported client registration. Leave client ID and client secret blank when the form supports dynamic registration or CIMD discovery.
+5. Select **Connect**, sign into RogNet, and approve the displayed access request.
+6. Return to Codex and start a new chat.
+
+An old custom plugin configured as **No authentication** needs its authentication setting updated. If the existing connection cannot be edited, create a new custom connection to the same URL with OAuth enabled. A server deployment cannot change the authentication mode stored in an already-created plugin connection.
+
+For a direct Codex CLI connection:
+
+```sh
+codex mcp add rognet --url http://localhost:3000/mcp
+codex mcp login rognet
+```
+
+The login opens the existing RogNet sign-in screen and a consent page showing the registered application and requested permissions. You can cancel the connection or revoke it later in Settings. RogNet uses Better Auth’s maintained MCP/OAuth provider, S256 PKCE, exact registered redirects, signed expiring consent queries, resource-bound tokens, and OAuth discovery. Client metadata discovery uses the provider’s DNS-pinned transport; DCR remains available for compatible clients that need it.
+
+Access tokens expire after ten minutes; refresh tokens rotate and have a thirty-day lifetime. Revoking a connected application in RogNet Settings immediately blocks its existing access tokens and refresh family. Revoking only a refresh token through the standard token-revocation endpoint stops renewal; an already issued JWT can remain usable until its expiry. OAuth access also requires the originating RogNet browser session to remain valid: signing out or session expiry requires reconnecting. Closing the browser alone does not sign out.
+
+### Manual bearer credentials
 
 For Codex CLI, set `ROGNET_AGENT_KEY` in its environment, then run:
 
 ```sh
-codex mcp add rognet --url http://localhost:3000/mcp --bearer-token-env-var ROGNET_AGENT_KEY
+codex mcp add rognet-token --url http://localhost:3000/mcp --bearer-token-env-var ROGNET_AGENT_KEY
 ```
 
 Claude Code supports a bearer header:
@@ -70,6 +96,7 @@ Tools are discoverable before authentication; private research operations requir
 
 | Stage | Tools |
 | --- | --- |
+| Connected identity | `get_profile` |
 | Campaign | `create_campaign`, `get_campaign`, `list_campaigns`, `get_research_context` |
 | Hypothesis | `create_hypothesis`, `list_hypotheses`, `get_hypothesis` |
 | Experiment | `propose_experiment`, `start_experiment_run`, `report_run_progress`, `complete_experiment_run`, `list_experiments`, `get_experiment` |
@@ -127,9 +154,12 @@ With a development server running against a disposable database:
 npm run typecheck
 npm run build
 node scripts/test-research.mjs http://localhost:3000
+npm run test:oauth -- http://localhost:3000
 ```
 
 The write-based integration suite creates temporary synthetic accounts and private campaigns. It tests real MCP discovery and lifecycle calls, graph relationships, negative and inconclusive results, separation of observations and analyses, progress calculation, incompatible comparisons, transactional idempotency, invalid transitions, account and campaign scope, agent approval denial, human approval, credential revocation, ordered persisted events, SSE delivery, request size limits and Origin validation. Records are retained in the test database for inspection. A fresh MCP connection verifies persisted context; it does not restart the server process automatically.
+
+The OAuth suite loads the development database from `.env.local` to verify correctly signed expired and incorrectly bound token fixtures. It exercises real MCP SDK discovery and registration, S256 PKCE, signed login continuation, consent, resource and scope enforcement, redirect validation, refresh rotation and replay, connected-app revocation, reconnection, and stable run ownership across refresh. Run it only against a disposable development database; the suite rejects remote targets unless explicitly enabled. This protocol test does not operate the installed Codex plugin's connection settings.
 
 Legacy regression scripts remain available: `test:campaigns`, `test:experiments`, and `test:reproduction-status`. `scripts/test-mcp.mjs` targets the original tool surface at `/mcp/registry`; use the new research suite for `/mcp`.
 

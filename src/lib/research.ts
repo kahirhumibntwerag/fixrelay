@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { z } from "zod";
 import { getAuthPool } from "./auth";
 import type { Principal } from "./auth-access";
+import { assertResearchScope } from "./auth-access";
 import { compatibleObservation, metricProgress } from "./research-metrics";
 
 const uuid = z.string().uuid();
@@ -223,6 +224,7 @@ export async function assertCampaignAccess(
   principal: Principal,
   write = false,
 ) {
+  assertResearchScope(principal, write);
   if (!uuid.safeParse(campaignId).success)
     throw new ResearchError("Invalid campaign ID");
   if (
@@ -320,6 +322,7 @@ export async function mutateResearch(
   principal: Principal,
   idempotencyKey: string,
 ) {
+  assertResearchScope(principal, true);
   if (!Object.hasOwn(researchSchemas, action))
     throw new ResearchError("Unknown research action");
   const key = z.string().min(8).max(160).parse(idempotencyKey);
@@ -762,7 +765,7 @@ export async function mutateResearch(
           409,
         );
       const { rows } = await sql.query(
-        `INSERT INTO research_runs(experiment_id,agent,agent_key_id,configuration,task,next_action) VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,
+        `INSERT INTO research_runs(experiment_id,agent,agent_key_id,configuration,task,next_action,agent_identity) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
         [
           p.experiment_id,
           principal.name,
@@ -770,6 +773,11 @@ export async function mutateResearch(
           JSON.stringify(p.configuration),
           p.task,
           p.next_action,
+          principal.kind === "agent"
+            ? principal.oauthClientId
+              ? `oauth:${principal.userId}:${principal.oauthClientId}`
+              : (principal.keyId ?? null)
+            : null,
         ],
       );
       await sql.query(
@@ -799,8 +807,14 @@ export async function mutateResearch(
         );
       if (
         principal.kind === "agent" &&
-        run.agent_key_id &&
-        run.agent_key_id !== principal.keyId
+        ((run.agent_identity &&
+          run.agent_identity !==
+            (principal.oauthClientId
+              ? `oauth:${principal.userId}:${principal.oauthClientId}`
+              : principal.keyId)) ||
+          (!run.agent_identity &&
+            run.agent_key_id &&
+            run.agent_key_id !== principal.keyId))
       )
         throw new ResearchError(
           "Only the agent that started this run may update it",
@@ -1095,6 +1109,7 @@ export async function mutateResearch(
 }
 
 export async function listResearchCampaigns(principal: Principal) {
+  assertResearchScope(principal, false);
   const { rows } = await getAuthPool().query(
     `SELECT c.id,c.title,c.question,c.summary,c.status,c.visibility,c.created_at,m.role,
     (SELECT count(*)::int FROM experiments e WHERE e.campaign_id=c.id) AS experiments
