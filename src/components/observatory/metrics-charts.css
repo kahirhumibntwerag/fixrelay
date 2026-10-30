@@ -71,7 +71,7 @@
 }
 .obs-metric-plot svg {
   display: block;
-  min-width: 500px;
+  min-width: 0;
   width: 100%;
 }
 .obs-metric-plot text {

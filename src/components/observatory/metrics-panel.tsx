@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Plus, X } from "lucide-react";
 import {
   date,
@@ -201,6 +201,18 @@ function MetricGraph({
   data: Snapshot;
   onInspectExperiment: (id: string) => void;
 }) {
+  const plotRef = useRef<HTMLDivElement>(null);
+  const [plotWidth, setPlotWidth] = useState(500);
+  useEffect(() => {
+    const element = plotRef.current;
+    if (!element) return;
+    const updateWidth = () =>
+      setPlotWidth(Math.max(180, Math.round(element.clientWidth)));
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const conditions = [
     ...new Set(points.map((item) => item.conditions_key || "")),
   ];
@@ -232,8 +244,12 @@ function MetricGraph({
     170 -
     ((value / magnitude - floor + padding) / (ceiling - floor + 2 * padding)) *
       135;
+  const left = 88,
+    right = plotWidth - 20;
   const x = (index: number) =>
-    series.length === 1 ? 260 : 70 + index * (360 / (series.length - 1));
+    series.length === 1
+      ? (left + right) / 2
+      : left + index * ((right - left) / (series.length - 1));
   const conditionName = (key: string, index: number) =>
     key === metric.evaluation_protocol
       ? "Registered evaluation"
@@ -265,12 +281,13 @@ function MetricGraph({
         </p>
       )}
       <div
+        ref={plotRef}
         className="obs-metric-plot"
         role="img"
         aria-label={`${words(metric.name)}: ${series.length} recorded ${series.length === 1 ? "measurement" : "measurements"}, from ${numeric(Math.min(...series.map((point) => Number(point.value))))} to ${numeric(Math.max(...series.map((point) => Number(point.value))))}${unitLabel(metric.unit)}. Exact values are in the Measurements table.`}
       >
-        <svg viewBox="0 0 500 220" aria-hidden="true">
-          <line x1="65" x2="445" y1="180" y2="180" stroke="#46515b" />
+        <svg viewBox={`0 0 ${plotWidth} 220`} aria-hidden="true">
+          <line x1={left} x2={right} y1="180" y2="180" stroke="#46515b" />
           <text x="8" y="42" fill="#a5b2bd">
             {numeric(high)}
           </text>
@@ -280,8 +297,8 @@ function MetricGraph({
           {comparable && (
             <>
               <line
-                x1="65"
-                x2="445"
+                x1={left}
+                x2={right}
                 y1={y(Number(metric.target))}
                 y2={y(Number(metric.target))}
                 stroke="#b5ed83"
@@ -289,8 +306,8 @@ function MetricGraph({
               />
               {metric.direction === "range" && metric.target_max != null && (
                 <line
-                  x1="65"
-                  x2="445"
+                  x1={left}
+                  x2={right}
                   y1={y(Number(metric.target_max))}
                   y2={y(Number(metric.target_max))}
                   stroke="#b5ed83"
@@ -299,8 +316,8 @@ function MetricGraph({
               )}
               {metric.baseline != null && (
                 <line
-                  x1="65"
-                  x2="445"
+                  x1={left}
+                  x2={right}
                   y1={y(Number(metric.baseline))}
                   y2={y(Number(metric.baseline))}
                   stroke="#a5b2bd"
@@ -333,10 +350,12 @@ function MetricGraph({
               </title>
             </circle>
           ))}
-          <text x="65" y="207" fill="#a5b2bd">
-            First recorded
-          </text>
-          <text x="445" y="207" textAnchor="end" fill="#a5b2bd">
+          {plotWidth >= 360 && (
+            <text x={left} y="207" fill="#a5b2bd">
+              First recorded
+            </text>
+          )}
+          <text x={right} y="207" textAnchor="end" fill="#a5b2bd">
             {series.length === 1
               ? "1 measurement"
               : `${series.length} measurements`}
