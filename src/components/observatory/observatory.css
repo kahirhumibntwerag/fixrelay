@@ -59,7 +59,46 @@ main:has(.observatory) > header .account-controls {
 .obs-heading {
   align-items: flex-start;
   flex-wrap: wrap;
-  margin-bottom: 30px;
+  margin-bottom: 22px;
+}
+.obs-actions-menu {
+  position: relative;
+}
+.obs-actions-menu > summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding: 10px 12px;
+  color: var(--muted);
+}
+.obs-actions-menu > div {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 5;
+  display: grid;
+  min-width: 210px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #192025;
+  box-shadow: 0 12px 30px #0006;
+}
+.obs-actions-menu a,
+.obs-actions-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  min-height: 44px;
+  color: var(--text);
+  font: inherit;
+  background: transparent;
+  border: 0;
+  text-align: left;
+}
+.obs-actions-menu a:hover,
+.obs-actions-menu button:hover {
+  background: #253129;
 }
 .obs-heading-copy {
   min-width: 0;
@@ -75,7 +114,7 @@ main:has(.observatory) > header .account-controls {
 .observatory h1 {
   font-size: 34px;
   letter-spacing: -1.3px;
-  margin: 0 0 10px;
+  margin: 0;
   line-height: 1.3;
 }
 .observatory h2 {
@@ -235,24 +274,21 @@ main:has(.observatory) > header .account-controls {
   padding: 12px;
 }
 .obs-campaign-bar {
-  background: #11161a;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  padding: 15px 18px;
+  align-items: flex-end;
   margin-bottom: 22px;
 }
 .obs-campaign-bar > label {
   font-size: 14px;
   letter-spacing: 0;
   flex: 1;
-  max-width: 75%;
+  min-width: 0;
   gap: 7px;
 }
 .obs-campaign-bar select {
   font-size: 16px;
   letter-spacing: 0;
   font-weight: 500;
-  max-width: 740px;
+  width: 100%;
   background: #171d22;
   border-color: #3b4751;
 }
@@ -263,6 +299,14 @@ main:has(.observatory) > header .account-controls {
   font-size: 14px;
   color: var(--muted);
   white-space: nowrap;
+}
+.obs-live-live,
+.obs-live-connecting {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 .obs-live > span {
   width: 6px;
@@ -1231,12 +1275,15 @@ main:has(.observatory) > header .account-controls {
   }
 }
 @media (max-width: 650px) {
+  main:has(.observatory) > header {
+    display: none;
+  }
   .observatory {
-    padding: 25px 17px 45px;
+    padding: 20px 17px 45px;
   }
   .obs-heading {
     flex-direction: column;
-    gap: 18px;
+    gap: 12px;
   }
   .obs-header-actions,
   .obs-heading-actions {
@@ -1259,11 +1306,15 @@ main:has(.observatory) > header .account-controls {
   .obs-campaign-bar {
     flex-wrap: wrap;
     gap: 14px;
-    padding: 14px;
+    padding: 0;
   }
   .obs-campaign-bar > label {
-    width: 100%;
+    width: auto;
     max-width: 100%;
+    flex-basis: 0;
+  }
+  .obs-live-reconnecting {
+    order: 3;
     flex-basis: 100%;
   }
   .obs-campaign-bar select {

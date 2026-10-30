@@ -179,21 +179,30 @@ export function Observatory({
       <div className="obs-heading">
         <h1>Research observatory</h1>
         <div className="obs-inline obs-header-actions">
-          <Link className="obs-text-link" href="/settings">
-            Connect agent <ArrowUpRight size={16} />
-          </Link>
-          <button
-            className="obs-link-button"
-            onClick={() => setImporting(!importing)}
-          >
-            Import campaign
-          </button>
           <button
             className="obs-button obs-primary"
             onClick={() => setCreating(!creating)}
           >
             <Plus size={16} /> New campaign
           </button>
+          <details className="obs-actions-menu">
+            <summary>More</summary>
+            <div>
+              <Link href="/settings">
+                Account and agents <ArrowUpRight size={16} />
+              </Link>
+              <button
+                onClick={(event) => {
+                  event.currentTarget
+                    .closest("details")
+                    ?.removeAttribute("open");
+                  setImporting(!importing);
+                }}
+              >
+                Import campaign
+              </button>
+            </div>
+          </details>
         </div>
       </div>
       {creating && (

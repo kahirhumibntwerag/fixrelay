@@ -239,7 +239,7 @@ export function OverviewPanel({
               <span>Best result</span>
               <strong>
                 {data.summary.best_result == null
-                  ? "No results yet"
+                  ? "Not available"
                   : numeric(data.summary.best_result)}
                 {data.summary.best_result != null && (
                   <small>
