@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
+import pg from "pg";
 import { connectResearch, toolData } from "./demo-research.mjs";
 
 const base = new URL(process.argv[2] || "http://localhost:3001").origin;
@@ -119,12 +120,13 @@ try {
   const owner = await account();
   const foreign = await account();
   const discovery = await owner.client.listTools();
-  for (const name of ["register_metric", "publish_campaign", "create_comparison_table"]) {
+  for (const name of ["register_metric", "publish_campaign", "create_comparison_table", "remove_metric", "remove_chart", "remove_comparison_table"]) {
     const tool = discovery.tools.find((entry) => entry.name === name);
     assert(tool, `MCP must advertise ${name}`);
     assert.deepEqual(tool._meta.securitySchemes, [
       { type: "oauth2", scopes: ["research:write"] },
     ]);
+    if (name.startsWith("remove_")) assert.equal(tool.annotations.destructiveHint, true);
   }
   assert.equal(
     discovery.tools.find((entry) => entry.name === "publish_campaign")
@@ -148,6 +150,7 @@ try {
     metric: rmse,
   });
   assert.deepEqual(legacy.metric_ids, [legacy.metric_id]);
+  await denied(owner.client, "remove_metric", { campaign_id: legacy.id, metric_id: legacy.metric_id }, 409);
   const campaign = await invoke(owner.client, "create_campaign", {
     ...input,
     metrics: [rmse, csi],
@@ -155,6 +158,14 @@ try {
   assert.equal(campaign.metric_ids.length, 2);
   assert.equal(campaign.metric_id, campaign.metric_ids[0]);
   const scope = { campaign_id: campaign.id };
+  const removable = await invoke(owner.client, "register_metric", { ...scope, metric: { ...rmse, name: "SYNTHETIC removable metric" } });
+  await denied(foreign.client, "remove_metric", { ...scope, metric_id: removable.metric_id }, 403);
+  const removeMetricKey = randomUUID();
+  const removeMetricInput = { ...scope, metric_id: removable.metric_id };
+  const removedMetric = await invoke(owner.client, "remove_metric", removeMetricInput, removeMetricKey);
+  assert.equal(removedMetric.removed, true);
+  assert.deepEqual(await invoke(owner.client, "remove_metric", removeMetricInput, removeMetricKey), removedMetric);
+  await denied(owner.client, "remove_metric", removeMetricInput, 404);
   const tableInput = { ...scope, title: "SYNTHETIC comparison", caption: "Invented values; units in headers.", columns: ["Method", "Accuracy (%)"], rows: [["Baseline", 82], ["Candidate", 87]] };
   const tableKey = randomUUID();
   const table = await invoke(owner.client, "create_comparison_table", tableInput, tableKey);
@@ -168,6 +179,21 @@ try {
   assert.equal(privateTables.tables.length, 2);
   assert.deepEqual(privateTables.tables[0].rows, tableInput.rows);
   await denied(foreign.client, "list_comparison_tables", scope, 403);
+  // The app has no membership-editing API; use the disposable local DB only
+  // when supplied to verify that a write-capable researcher is not an owner.
+  if (process.env.DATABASE_URL) {
+    assert(["localhost", "127.0.0.1", "::1"].includes(new URL(process.env.DATABASE_URL).hostname), "Membership fixtures require a local test database");
+    const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
+    await db.connect();
+    try {
+      const profile = toolData(await foreign.client.callTool({ name: "get_profile", arguments: {} }));
+      await db.query("INSERT INTO research_campaign_members(campaign_id,user_id,role) VALUES($1,$2,'researcher')", [campaign.id, profile.id]);
+      await denied(foreign.client, "remove_comparison_table", { ...scope, table_id: hidden.table_id }, 403);
+      const memberSnapshot = await fetch(`${base}/api/research?campaign_id=${campaign.id}`, { headers: { Cookie: foreign.cookie } });
+      assert.equal((await memberSnapshot.json()).campaign.role, "researcher");
+      await db.query("DELETE FROM research_campaign_members WHERE campaign_id=$1 AND user_id=$2", [campaign.id, profile.id]);
+    } finally { await db.end(); }
+  }
   const initial = toolData(
     await owner.client.callTool({ name: "get_campaign", arguments: scope }),
   );
@@ -274,6 +300,7 @@ try {
       }),
     );
   }
+  await denied(owner.client, "remove_metric", { ...scope, metric_id: campaign.metric_id }, 409);
   await invoke(owner.client, "record_observation", {
     ...scope,
     run_id: run.id,
@@ -381,6 +408,17 @@ try {
   const pageHtml = await page.text();
   assert(pageHtml.includes("SYNTHETIC comparison"));
   assert(!pageHtml.includes("SYNTHETIC private table"));
+  await denied(foreign.client, "remove_comparison_table", { ...scope, table_id: table.table_id }, 403);
+  await denied(owner.client, "remove_comparison_table", { campaign_id: legacy.id, table_id: table.table_id }, 404);
+  const removeTableKey = randomUUID();
+  const removeTableInput = { ...scope, table_id: table.table_id };
+  const removedTable = await invoke(owner.client, "remove_comparison_table", removeTableInput, removeTableKey);
+  assert.equal(removedTable.was_published, true);
+  assert.deepEqual(await invoke(owner.client, "remove_comparison_table", removeTableInput, removeTableKey), removedTable);
+  const afterRemoval = toolData(await anonymous.callTool({ name: "list_public_comparison_tables", arguments: scope }));
+  assert.equal(afterRemoval.tables.length, 0);
+  const remainingTables = toolData(await owner.client.callTool({ name: "list_comparison_tables", arguments: scope }));
+  assert.deepEqual(remainingTables.tables.map((item) => item.id), [hidden.table_id]);
   const publicCampaign = toolData(
     await anonymous.callTool({ name: "get_public_campaign", arguments: scope }),
   );

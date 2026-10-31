@@ -48,6 +48,9 @@ export const researchSchemas = {
     metrics: z.array(metricSchema).min(1).max(20).optional(),
   }),
   register_metric: z.object({ ...scoped, metric: metricSchema }),
+  remove_metric: z.object({ ...scoped, metric_id: uuid }),
+  remove_chart: z.object({ ...scoped, chart_id: uuid }),
+  remove_comparison_table: z.object({ ...scoped, table_id: uuid }),
   create_comparison_table: z.object({
     ...scoped,
     title: short,
@@ -415,6 +418,8 @@ export async function mutateResearch(
       );
       if (action === "publish_campaign" && role !== "owner")
         throw new ResearchError("Only the campaign owner may publish it", 403);
+      if (action.startsWith("remove_") && role !== "owner")
+        throw new ResearchError("Only the campaign owner may remove records", 403);
     }
     const previous = await sql.query(
       "SELECT fingerprint,response FROM research_mutations WHERE user_id=$1 AND idempotency_key=$2",
@@ -523,6 +528,33 @@ export async function mutateResearch(
       );
       result = { id: inserted.rows[0].id, table_id: inserted.rows[0].id, visibility: "private" };
       description = "Comparison table created: " + p.title;
+    } else if (action === "remove_metric") {
+      const found = await sql.query(
+        "SELECT id,name FROM research_metrics WHERE id=$1 AND campaign_id=$2",
+        [p.metric_id, campaignId],
+      );
+      if (!found.rows[0]) throw new ResearchError("Metric not found in this campaign", 404);
+      const dependencies = await sql.query(
+        `SELECT (SELECT count(*)::int FROM research_metrics WHERE campaign_id=$1) AS metric_count,
+          EXISTS(SELECT 1 FROM research_observations WHERE metric_id=$2) AS has_observations,
+          EXISTS(SELECT 1 FROM research_charts WHERE metric_id=$2) AS has_charts`,
+        [campaignId, p.metric_id],
+      );
+      const { metric_count, has_observations, has_charts } = dependencies.rows[0];
+      if (metric_count <= 1) throw new ResearchError("A campaign must retain at least one metric", 409);
+      if (has_observations || has_charts)
+        throw new ResearchError("Cannot remove a metric with recorded observations or linked charts", 409);
+      await sql.query("DELETE FROM research_metrics WHERE id=$1 AND campaign_id=$2", [p.metric_id, campaignId]);
+      result = { id: p.metric_id, removed: true };
+      description = "Metric removed: " + found.rows[0].name;
+    } else if (action === "remove_chart" || action === "remove_comparison_table") {
+      const isChart = action === "remove_chart";
+      const id = isChart ? p.chart_id : p.table_id;
+      const table = isChart ? "research_charts" : "research_comparison_tables";
+      const removed = await sql.query(`DELETE FROM ${table} WHERE id=$1 AND campaign_id=$2 RETURNING id,title,published_at`, [id, campaignId]);
+      if (!removed.rows[0]) throw new ResearchError(`${isChart ? "Chart" : "Table"} not found in this campaign`, 404);
+      result = { id, removed: true, was_published: !!removed.rows[0].published_at };
+      description = `${isChart ? "Chart" : "Comparison table"} removed: ${removed.rows[0].title}`;
     } else if (action === "register_metric") {
       const existing = await sql.query(
         "SELECT name FROM research_metrics WHERE campaign_id=$1",
@@ -1248,13 +1280,14 @@ export async function researchSnapshot(
   const sql = await getAuthPool().connect();
   try {
     await sql.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
-    await assertCampaignAccess(sql, campaignId, principal);
+    const role = await assertCampaignAccess(sql, campaignId, principal);
     const campaign = (
       await sql.query(
         "SELECT id,title,question,summary,objective,status,constraints,stop_conditions,visibility,created_at FROM campaigns WHERE id=$1",
         [campaignId],
       )
     ).rows[0];
+    campaign.role = role;
     const metrics = (
       await sql.query(
         "SELECT * FROM research_metrics WHERE campaign_id=$1 ORDER BY created_at,id",

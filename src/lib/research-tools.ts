@@ -258,6 +258,12 @@ export function registerResearchTools(
       "Create a private campaign with an objective and registered metrics. Supply either metric (single, backward compatible) or metrics (1–20); the first metric is primary. Returns metric_id plus metric_ids for observations. Requires an account-wide credential.",
     register_metric:
       "Register another evaluation metric in a campaign, with its own direction, target and comparison protocol. Returns metric_id for record_observation. Existing measurements and metric definitions are unchanged.",
+    remove_metric:
+      "Permanently remove an unused metric. Only the campaign owner may remove it; the last metric, metrics with observations, and metrics linked to charts cannot be removed. Removing the primary metric makes the next metric primary. Audit history remains. Only call when the user explicitly requests this removal.",
+    remove_chart:
+      "Permanently remove a chart and its image bytes from a campaign, including its public page if published. Only the campaign owner may remove it. Audit metadata remains. Only call when the user explicitly requests this removal.",
+    remove_comparison_table:
+      "Remove a comparison table from a campaign, including its public page if published. Only the campaign owner may remove it. Its original contents remain in immutable research history; this is not secure erasure. Only call when the user explicitly requests this removal.",
     create_comparison_table:
       "Create a private structured comparison table in a campaign. Supply a title, optional caption, column headers and rows of text, numbers or null. Every row must match the column count. Use the caption to explain units, conditions and provenance. Tables remain private until selected in publish_campaign.table_ids.",
     publish_campaign:
@@ -300,6 +306,8 @@ export function registerResearchTools(
         annotations:
           action === "publish_campaign"
             ? { ...write, destructiveHint: true, openWorldHint: true }
+            : action.startsWith("remove_")
+              ? { ...write, destructiveHint: true, openWorldHint: true }
             : write,
         _meta: {
           securitySchemes: [{ type: "oauth2", scopes: ["research:write"] }],

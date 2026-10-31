@@ -5,6 +5,7 @@ import { ArrowUpRight, Upload, X } from "lucide-react";
 import type { ResearchChart, Snapshot } from "./types";
 import "./metrics-charts.css";
 import { formatResearchText } from "@/lib/research-text";
+import { RemoveResearchItem } from "./remove-research-item";
 
 const maxBytes = 2 * 1024 * 1024;
 const imageTypes = ["image/png", "image/jpeg", "image/webp"];
@@ -286,6 +287,7 @@ export function ChartsPanel({
                 <span className="obs-subtle-label">
                   {chart.is_public ? "Public" : "Private"}
                 </span>
+                {data.campaign.role === "owner" && <RemoveResearchItem campaignId={data.campaign.id} id={chart.id} name={chart.title} kind="chart" isPublic={chart.is_public} onRemoved={() => { setCharts((items) => items.filter((item) => item.id !== chart.id)); setSuccess("Chart removed."); onUpdated(); }} />}
               </figcaption>
             </figure>
           ))}

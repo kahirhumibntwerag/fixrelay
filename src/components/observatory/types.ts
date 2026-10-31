@@ -8,6 +8,7 @@ export type Campaign = {
   constraints?: string;
   stop_conditions?: string;
   visibility: string;
+  role?: string;
 };
 export type Metric = {
   id: string;

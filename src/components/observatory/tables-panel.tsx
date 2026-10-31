@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ComparisonTable, type ComparisonTableData } from "@/components/comparison-table";
 import type { Snapshot } from "./types";
+import { RemoveResearchItem } from "./remove-research-item";
 
 export function TablesPanel({ data, onUpdated }: { data: Snapshot; onUpdated: () => void }) {
   const [tables, setTables] = useState<ComparisonTableData[]>([]);
@@ -55,7 +56,7 @@ export function TablesPanel({ data, onUpdated }: { data: Snapshot; onUpdated: ()
     </form>}
     {error && <p className="obs-form-error" role="alert">{error}</p>}
     {success && <p className="obs-chart-success" role="status">{success}</p>}
-    {tables.map((table) => <div key={table.id}><ComparisonTable table={table} /><p className="obs-muted">{table.is_public ? "Public" : "Private"}</p></div>)}
+    {tables.map((table) => <div key={table.id}><ComparisonTable table={table} /><p className="obs-muted">{table.is_public ? "Public" : "Private"}</p>{data.campaign.role === "owner" && <RemoveResearchItem campaignId={data.campaign.id} id={table.id} name={table.title} kind="comparison_table" isPublic={table.is_public} onRemoved={() => { setTables((items) => items.filter((item) => item.id !== table.id)); setSuccess("Table removed."); onUpdated(); }} />}</div>)}
     {!tables.length && <p className="obs-muted">Add a table to compare results alongside your metrics.</p>}
   </section>;
 }

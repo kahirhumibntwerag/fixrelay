@@ -11,6 +11,7 @@ import {
   type Snapshot,
 } from "./types";
 import "./metrics-charts.css";
+import { RemoveResearchItem } from "./remove-research-item";
 
 function unitLabel(unit?: string) {
   return unit && unit !== "dimensionless" ? ` ${unit}` : "";
@@ -49,6 +50,7 @@ export function MetricsPanel({
   onInspectExperiment: (id: string) => void;
 }) {
   const [adding, setAdding] = useState(false);
+  const [removalMessage, setRemovalMessage] = useState("");
   return (
     <section className="obs-card obs-metrics-panel">
       <div className="obs-card-heading">
@@ -71,6 +73,7 @@ export function MetricsPanel({
           }}
         />
       )}
+      {removalMessage && <p className="obs-chart-success" role="status">{removalMessage}</p>}
       {data.metrics.length ? (
         <div className="obs-metric-grid">
           {data.metrics.map((metric, index) => (
@@ -80,6 +83,7 @@ export function MetricsPanel({
               primary={index === 0}
               data={data}
               onInspectExperiment={onInspectExperiment}
+              onUpdated={() => { setRemovalMessage("Metric removed."); onUpdated(); }}
             />
           ))}
         </div>
@@ -95,11 +99,13 @@ function MetricCard({
   primary,
   data,
   onInspectExperiment,
+  onUpdated,
 }: {
   metric: Metric;
   primary: boolean;
   data: Snapshot;
   onInspectExperiment: (id: string) => void;
+  onUpdated: () => void;
 }) {
   const points = useMemo(() => measurements(data, metric), [data, metric]);
   const summary = data.summary.metric_results?.find(
@@ -186,6 +192,7 @@ function MetricCard({
           </p>
         )}
       </details>
+      {data.campaign.role === "owner" && <RemoveResearchItem campaignId={data.campaign.id} id={metric.id} name={metric.name} kind="metric" primary={primary && data.metrics.length > 1} onRemoved={onUpdated} />}
     </article>
   );
 }

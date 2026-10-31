@@ -3,6 +3,9 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
 }
+.obs-remove-item { margin-top: 14px; }
+.obs-remove-item p:not(.obs-form-error) { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.obs-remove-item .obs-form-actions { margin-top: 10px; }
 .obs-metric-card {
   min-width: 0;
   border: 1px solid var(--border);

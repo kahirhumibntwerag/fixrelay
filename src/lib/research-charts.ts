@@ -337,10 +337,14 @@ export async function uploadResearchChart(
           "Idempotency key was already used for different input",
           409,
         );
-      const response = {
-        chart: await chartMetadata(sql, previous.rows[0].response.chart.id),
-        replayed: true,
-      };
+      let chart;
+      try {
+        chart = await chartMetadata(sql, previous.rows[0].response.chart.id);
+      } catch (error) {
+        if (!(error instanceof ChartError) || error.status !== 404) throw error;
+        chart = { ...previous.rows[0].response.chart, deleted: true };
+      }
+      const response = { chart, replayed: true };
       await sql.query("COMMIT");
       return response;
     }

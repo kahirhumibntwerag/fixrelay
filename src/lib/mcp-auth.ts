@@ -27,6 +27,9 @@ const privateReads = new Set([
 const privateWrites = new Set([
   "create_campaign",
   "register_metric",
+  "remove_metric",
+  "remove_chart",
+  "remove_comparison_table",
   "create_comparison_table",
   "publish_campaign",
   "upload_chart",

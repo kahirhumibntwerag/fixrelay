@@ -227,6 +227,11 @@ try {
     "synthetic-chart-test",
   );
   clients.push(agent);
+  const extraMetric = toolData(await agent.callTool({ name: "register_metric", arguments: {
+    campaign_id: a.id, metric: { name: "SYNTHETIC extra metric", direction: "maximize", target: 1, evaluation_protocol: "Synthetic chart privacy fixture" }, idempotency_key: randomUUID(),
+  }}));
+  await rejectedTool(agent, "remove_metric", { campaign_id: a.id, metric_id: a.metric_id, idempotency_key: randomUUID() }, 409);
+  toolData(await agent.callTool({ name: "remove_metric", arguments: { campaign_id: a.id, metric_id: extraMetric.metric_id, idempotency_key: randomUUID() } }));
   const anonymous = await connectResearch(
     base,
     null,
@@ -502,6 +507,18 @@ try {
     },
     404,
   );
+  await rejectedTool(agent, "remove_chart", { ...scope, chart_id: foreign.data.chart.id, idempotency_key: randomUUID() }, 404);
+  const deleteKey = randomUUID();
+  const removeArgs = { ...scope, chart_id: chart.id, idempotency_key: deleteKey };
+  const removed = toolData(await agent.callTool({ name: "remove_chart", arguments: removeArgs }));
+  assert.equal(removed.was_published, true);
+  assert.deepEqual(toolData(await agent.callTool({ name: "remove_chart", arguments: removeArgs })), removed);
+  assert.equal((await fetch(`${base}${chart.url}`)).status, 404);
+  assert.equal((await json(`/api/research/charts?campaign_id=${a.id}&public=true`)).data.charts.length, 0);
+  const deletedRetry = await upload(owner, a.id, { key, metric_id: a.metric_id, caption });
+  assert.equal(deletedRetry.response.status, 200);
+  assert.equal(deletedRetry.data.chart.deleted, true);
+  assert.equal((await fetch(`${base}${chart.url}`)).status, 404);
   console.log(
     "PASS: MCP upload/list, owner-agent publication, explicit selected chart publication and private-by-default later uploads",
   );
