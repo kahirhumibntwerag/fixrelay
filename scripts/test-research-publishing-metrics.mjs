@@ -119,7 +119,7 @@ try {
   const owner = await account();
   const foreign = await account();
   const discovery = await owner.client.listTools();
-  for (const name of ["register_metric", "publish_campaign"]) {
+  for (const name of ["register_metric", "publish_campaign", "create_comparison_table"]) {
     const tool = discovery.tools.find((entry) => entry.name === name);
     assert(tool, `MCP must advertise ${name}`);
     assert.deepEqual(tool._meta.securitySchemes, [
@@ -155,6 +155,19 @@ try {
   assert.equal(campaign.metric_ids.length, 2);
   assert.equal(campaign.metric_id, campaign.metric_ids[0]);
   const scope = { campaign_id: campaign.id };
+  const tableInput = { ...scope, title: "SYNTHETIC comparison", caption: "Invented values; units in headers.", columns: ["Method", "Accuracy (%)"], rows: [["Baseline", 82], ["Candidate", 87]] };
+  const tableKey = randomUUID();
+  const table = await invoke(owner.client, "create_comparison_table", tableInput, tableKey);
+  assert.equal((await invoke(owner.client, "create_comparison_table", tableInput, tableKey)).table_id, table.table_id);
+  await denied(owner.client, "create_comparison_table", { ...tableInput, rows: [["bad", 1, 2]] }, 400);
+  await denied(foreign.client, "create_comparison_table", tableInput, 403);
+  const hidden = await invoke(owner.client, "create_comparison_table", { ...tableInput, title: "SYNTHETIC private table" });
+  const beforePublication = await fetch(`${base}/api/research/tables?campaign_id=${campaign.id}&public=true`);
+  assert.deepEqual((await beforePublication.json()).tables, []);
+  const privateTables = toolData(await owner.client.callTool({ name: "list_comparison_tables", arguments: scope }));
+  assert.equal(privateTables.tables.length, 2);
+  assert.deepEqual(privateTables.tables[0].rows, tableInput.rows);
+  await denied(foreign.client, "list_comparison_tables", scope, 403);
   const initial = toolData(
     await owner.client.callTool({ name: "get_campaign", arguments: scope }),
   );
@@ -317,7 +330,7 @@ try {
   await denied(
     foreign.client,
     "publish_campaign",
-    { ...scope, experiment_ids: [experiment.id] },
+    { ...scope, experiment_ids: [experiment.id], table_ids: [table.table_id] },
     403,
   );
   await denied(
@@ -340,7 +353,7 @@ try {
   const published = await invoke(
     owner.client,
     "publish_campaign",
-    { ...scope, experiment_ids: [experiment.id] },
+    { ...scope, experiment_ids: [experiment.id], table_ids: [table.table_id] },
     publicationKey,
   );
   assert.equal(published.visibility, "public");
@@ -348,7 +361,7 @@ try {
     await invoke(
       owner.client,
       "publish_campaign",
-      { ...scope, experiment_ids: [experiment.id] },
+      { ...scope, experiment_ids: [experiment.id], table_ids: [table.table_id] },
       publicationKey,
     ),
     published,
@@ -359,6 +372,15 @@ try {
     "rognet-multi-metric-public-test",
   );
   clients.push(anonymous);
+  const publicTables = toolData(await anonymous.callTool({ name: "list_public_comparison_tables", arguments: scope }));
+  assert.deepEqual(publicTables.tables.map((item) => item.id), [table.table_id]);
+  assert(!publicTables.tables.some((item) => item.id === hidden.table_id));
+  assert.deepEqual(publicTables.tables[0].rows, tableInput.rows);
+  const page = await fetch(`${base}/campaigns/${campaign.id}`);
+  assert.equal(page.status, 200);
+  const pageHtml = await page.text();
+  assert(pageHtml.includes("SYNTHETIC comparison"));
+  assert(!pageHtml.includes("SYNTHETIC private table"));
   const publicCampaign = toolData(
     await anonymous.callTool({ name: "get_public_campaign", arguments: scope }),
   );

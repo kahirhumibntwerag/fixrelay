@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { getCampaign } from "@/lib/campaigns";
 import { type CampaignViewData } from "@/components/campaign-view";
 import { PublicResearchCharts } from "@/components/public-research-charts";
+import { ComparisonTable, type ComparisonTableData } from "@/components/comparison-table";
+import { listComparisonTables } from "@/lib/research-tables";
 export const dynamic = "force-dynamic";
 export default async function CampaignPage({
   params,
@@ -20,6 +22,7 @@ export default async function CampaignPage({
     ),
     data = await getCampaign(id, undefined, 10, offset);
   if (!data) notFound();
+  const { tables } = await listComparisonTables({ campaign_id: id, limit: 30 });
   return (
     <article className="content article">
       <Link className="text-link" href="/campaigns">
@@ -30,6 +33,7 @@ export default async function CampaignPage({
         initial={data as unknown as CampaignViewData}
       />
       <PublicResearchCharts campaignId={id} />
+      {tables.length > 0 && <section><h2>Comparison tables</h2>{tables.map((table: ComparisonTableData) => <ComparisonTable key={table.id} table={table} />)}</section>}
       {offset > 0 && (
         <Link
           className="text-link"

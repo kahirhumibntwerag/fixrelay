@@ -28,6 +28,8 @@ import {
 
 import { MetricsPanel } from "./metrics-panel";
 import { ChartsPanel } from "./charts-panel";
+import { TablesPanel } from "./tables-panel";
+import type { ComparisonTableData } from "@/components/comparison-table";
 import { formatResearchText } from "@/lib/research-text";
 
 export function Badge({ status }: { status?: string | null }) {
@@ -225,6 +227,7 @@ export function OverviewPanel({
         onInspectExperiment={onInspectExperiment}
       />
       <ChartsPanel data={data} onUpdated={onUpdated} />
+      <TablesPanel data={data} onUpdated={onUpdated} />
       {hasAttention && (
         <section className="obs-card">
           <div className="obs-card-heading">
@@ -340,6 +343,8 @@ function SharingPanel({
   const [attempt, setAttempt] = useState({ payload: "", key: "" });
   const [charts, setCharts] = useState<ResearchChart[]>([]);
   const [selectedCharts, setSelectedCharts] = useState<string[]>([]);
+  const [tables, setTables] = useState<ComparisonTableData[]>([]);
+  const [selectedTables, setSelectedTables] = useState<string[]>([]);
   const [loadingCharts, setLoadingCharts] = useState(false);
   const [sharingOpen, setSharingOpen] = useState(false);
   const chartEventVersion = data.events.at(-1)?.id;
@@ -354,6 +359,10 @@ function SharingPanel({
       if (!response.ok)
         throw new Error(body.error || "Unable to load charts for publication.");
       setCharts(body.charts || []);
+      const tablesResponse = await fetch(`/api/research/tables?campaign_id=${encodeURIComponent(data.campaign.id)}`, { cache: "no-store" });
+      const tablesBody = await tablesResponse.json();
+      if (!tablesResponse.ok) throw new Error(tablesBody.error || "Unable to load tables for publication.");
+      setTables(tablesBody.tables || []);
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Unable to load charts.",
@@ -374,6 +383,7 @@ function SharingPanel({
         campaign_id: data.campaign.id,
         experiment_ids: selected,
         chart_ids: selectedCharts,
+        table_ids: selectedTables,
       },
       payload = JSON.stringify(input);
     const key = attempt.payload === payload ? attempt.key : crypto.randomUUID();
@@ -394,6 +404,7 @@ function SharingPanel({
       setSuccess(true);
       setSelected([]);
       setSelectedCharts([]);
+      setSelectedTables([]);
       setAcknowledged(false);
       onUpdated();
     } catch (cause) {
@@ -418,7 +429,7 @@ function SharingPanel({
           </span>
         </summary>
         <p className="obs-muted">
-          Selected experiments, charts, and the campaign summary will be public,
+          Selected experiments, charts, tables, and the campaign summary will be public,
           including methods, observations, evidence, and limitations. Review
           them for private information before publishing. Run configurations and
           activity remain private.
@@ -493,6 +504,13 @@ function SharingPanel({
                 })}
               </div>
             )}
+            {tables.length > 0 && <div className="obs-share-list">
+              <h3>Comparison tables</h3>
+              {tables.map((table) => <label key={table.id}>
+                <input type="checkbox" checked={selectedTables.includes(table.id)} onChange={(event) => setSelectedTables((items) => event.target.checked ? [...items, table.id] : items.filter((id) => id !== table.id))} />
+                <span>{table.title}<small>Include this table</small></span>
+              </label>)}
+            </div>}
             <label className="obs-share-acknowledgement">
               <input
                 type="checkbox"
@@ -501,7 +519,7 @@ function SharingPanel({
                 onChange={(event) => setAcknowledged(event.target.checked)}
               />
               <span>
-                I reviewed the selected experiments, charts, and campaign
+                I reviewed the selected experiments, charts, tables, and campaign
                 summary and approve making them public.
               </span>
             </label>
@@ -520,14 +538,14 @@ function SharingPanel({
             )}
             <div className="obs-form-actions">
               <span className="obs-muted">
-                {selected.length} experiments · {selectedCharts.length} charts
+                {selected.length} experiments · {selectedCharts.length} charts · {selectedTables.length} tables
                 selected
               </span>
               <button
                 className="obs-button obs-primary"
                 disabled={
                   busy ||
-                  (!selected.length && !selectedCharts.length) ||
+                  (!selected.length && !selectedCharts.length && !selectedTables.length) ||
                   !acknowledged ||
                   loadingCharts
                 }

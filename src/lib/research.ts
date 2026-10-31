@@ -48,6 +48,13 @@ export const researchSchemas = {
     metrics: z.array(metricSchema).min(1).max(20).optional(),
   }),
   register_metric: z.object({ ...scoped, metric: metricSchema }),
+  create_comparison_table: z.object({
+    ...scoped,
+    title: short,
+    caption: optionalText,
+    columns: z.array(short).min(2).max(20),
+    rows: z.array(z.array(z.union([z.string().max(200), z.number().finite(), z.null()])).min(2).max(20)).min(1).max(100),
+  }),
   claim_campaign: z.object({
     ...scoped,
     access_token: z.string().min(24).max(200),
@@ -56,6 +63,7 @@ export const researchSchemas = {
     ...scoped,
     experiment_ids: z.array(uuid).max(100).default([]),
     chart_ids: z.array(uuid).max(30).default([]),
+    table_ids: z.array(uuid).max(30).default([]),
   }),
   submit_reproduction: z.object({
     ...scoped,
@@ -342,13 +350,20 @@ export async function mutateResearch(
     );
   if (action === "create_campaign" && !!p.metric === !!p.metrics)
     throw new ResearchError("Provide either metric or metrics, but not both");
+  if (action === "create_comparison_table") {
+    if (!p.rows.every((row: unknown[]) => row.length === p.columns.length))
+      throw new ResearchError("Each row must have one cell per column");
+    if (JSON.stringify({ columns: p.columns, rows: p.rows }).length > 30000)
+      throw new ResearchError("Table data is limited to 30,000 characters");
+  }
   if (
     action === "publish_campaign" &&
     !p.experiment_ids.length &&
-    !p.chart_ids.length
+    !p.chart_ids.length &&
+    !p.table_ids.length
   )
     throw new ResearchError(
-      "Select at least one completed experiment or chart to publish",
+      "Select at least one completed experiment, chart, or table to publish",
     );
   const requestedMetrics =
     action === "create_campaign"
@@ -499,6 +514,15 @@ export async function mutateResearch(
         visibility: "private",
       };
       description = "Research campaign created: " + p.title;
+    } else if (action === "create_comparison_table") {
+      const count = await sql.query("SELECT count(*)::int AS count FROM research_comparison_tables WHERE campaign_id=$1", [campaignId]);
+      if (count.rows[0].count >= 30) throw new ResearchError("A campaign can contain up to 30 comparison tables", 409);
+      const inserted = await sql.query(
+        `INSERT INTO research_comparison_tables(campaign_id,title,caption,column_headers,data_rows,created_by) VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,
+        [campaignId, p.title, p.caption, JSON.stringify(p.columns), JSON.stringify(p.rows), principal.userId],
+      );
+      result = { id: inserted.rows[0].id, table_id: inserted.rows[0].id, visibility: "private" };
+      description = "Comparison table created: " + p.title;
     } else if (action === "register_metric") {
       const existing = await sql.query(
         "SELECT name FROM research_metrics WHERE campaign_id=$1",
@@ -634,7 +658,7 @@ export async function mutateResearch(
       );
       if (!shared.rows.length)
         throw new ResearchError(
-          "Publish at least one completed experiment before sharing campaign charts",
+          "Publish at least one completed experiment before sharing campaign charts or tables",
           409,
         );
       if (p.chart_ids.length) {
@@ -646,6 +670,12 @@ export async function mutateResearch(
           p.experiment_ids,
         );
       }
+      if (p.table_ids.length) {
+        const ids = [...new Set(p.table_ids as string[])];
+        const found = await sql.query("SELECT id FROM research_comparison_tables WHERE campaign_id=$1 AND id=ANY($2::uuid[])", [campaignId, ids]);
+        if (found.rows.length !== ids.length) throw new ResearchError("A selected table does not belong to this campaign", 404);
+        await sql.query("UPDATE research_comparison_tables SET published_at=coalesce(published_at,now()) WHERE campaign_id=$1 AND id=ANY($2::uuid[])", [campaignId, ids]);
+      }
       await sql.query(`UPDATE campaigns SET visibility='public' WHERE id=$1`, [
         campaignId,
       ]);
@@ -654,6 +684,7 @@ export async function mutateResearch(
         visibility: "public",
         published_experiment_ids: p.experiment_ids,
         published_chart_ids: p.chart_ids,
+        published_table_ids: p.table_ids,
       };
       description =
         "Campaign owner published selected findings to the shared campaign registry";

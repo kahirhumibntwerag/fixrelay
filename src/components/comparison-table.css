@@ -1,0 +1,10 @@
+.comparison-table { margin: 20px 0; min-width: 0; }
+.comparison-table figcaption { margin-bottom: 12px; }
+.comparison-table figcaption strong { font-size: 1.1rem; }
+.comparison-table figcaption p { margin: 6px 0 0; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.comparison-table-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+.comparison-table table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.comparison-table th, .comparison-table td { text-align: left; vertical-align: top; padding: 11px 14px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; min-width: 110px; }
+.comparison-table thead th { color: var(--muted); font-weight: 600; }
+.comparison-table tbody th { font-weight: 500; }
+.comparison-table tbody tr:last-child th, .comparison-table tbody tr:last-child td { border-bottom: 0; }

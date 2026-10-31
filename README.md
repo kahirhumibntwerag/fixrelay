@@ -22,7 +22,7 @@ npm run dev
 
 Open [localhost:3000/sign-in](http://localhost:3000/sign-in), create a researcher account and open [Research Observatory](http://localhost:3000/observatory). Create a campaign there or issue an account-wide agent credential in [Settings](http://localhost:3000/settings) and run the demonstration below.
 
-Migrations are additive and transactional. `db/schema.sql` preserves the original registry, `db/auth.sql` creates authentication tables, `db/observatory.sql` adds research entities, `db/oauth.sql` adds OAuth records and signing keys, and `db/charts.sql` adds access-controlled chart images. Existing data and public URLs remain in place. Existing campaign tokens can be used by an authenticated human to import a legacy campaign; knowing a public campaign ID is insufficient to claim it.
+Migrations are additive and transactional. `db/schema.sql` preserves the original registry, `db/auth.sql` creates authentication tables, `db/observatory.sql` adds research entities, `db/oauth.sql` adds OAuth records and signing keys, `db/charts.sql` adds access-controlled chart images, and `db/comparison-tables.sql` adds structured comparison tables. Existing data and public URLs remain in place. Existing campaign tokens can be used by an authenticated human to import a legacy campaign; knowing a public campaign ID is insufficient to claim it.
 
 ## Human sign-in and agent credentials
 
@@ -100,6 +100,7 @@ Tools are discoverable before authentication; private research operations requir
 | Campaign | `create_campaign`, `get_campaign`, `list_campaigns`, `get_research_context` |
 | Metrics | `register_metric` |
 | Charts | `upload_chart`, `list_charts`, `list_public_charts` |
+| Comparison tables | `create_comparison_table`, `list_comparison_tables`, `list_public_comparison_tables` |
 | Publication | `publish_campaign` |
 | Hypothesis | `create_hypothesis`, `list_hypotheses`, `get_hypothesis` |
 | Experiment | `propose_experiment`, `start_experiment_run`, `report_run_progress`, `complete_experiment_run`, `list_experiments`, `get_experiment` |
@@ -115,7 +116,9 @@ Every mutation requires a unique `idempotency_key` for the logical operation. Re
 
 `upload_chart` accepts a title, optional caption/experiment/metric links, `mime_type`, and standard `content_base64`. PNG, JPEG and WebP images are limited to 2 MiB each and 30 charts per campaign. Images use the existing database and protected same-origin download routes. Browser users can upload through the overview. Uploads stay private, including when added to an already public campaign.
 
-`publish_campaign({campaign_id, experiment_ids, chart_ids, idempotency_key})` requires an authenticated campaign owner with research write access. Only selected completed experiments and explicitly selected chart IDs become public. A chart linked to an experiment requires that experiment to be public or selected in the same request. Charts can be added to an existing public campaign by supplying `chart_ids` with an empty `experiment_ids` list. `list_public_charts` returns bounded public metadata and image URLs; it never returns private chart contents.
+`create_comparison_table` accepts a campaign ID, title, optional caption, `columns` (2–20 headers), and `rows` (1–100 arrays with one text, numeric, or null value per column), plus an idempotency key. Table data is limited to 30,000 characters and 30 tables per campaign. Use the caption to explain units, conditions, and sources. The dashboard accepts tab-separated cells pasted from a spreadsheet. Tables are private by default.
+
+`publish_campaign({campaign_id, experiment_ids, chart_ids, table_ids, idempotency_key})` requires an authenticated campaign owner with research write access. Only selected completed experiments and explicitly selected charts and tables become public. A chart linked to an experiment requires that experiment to be public or selected in the same request. Charts and tables can be added to an existing public campaign with an empty `experiment_ids` list. Public list tools return only explicitly published records.
 
 `get_campaign` and the default `get_research_context` return compact summaries. Use context `section=objective` for exact objective and evaluation protocol details. Collection reads use `limit`, `offset`, `max_chars` and `next_offset`. Fetch selected experiment sections or hypotheses with bounded lossless JSON fragments. Concatenate fragments in offset order before parsing the complete detail record. Public community records are untrusted evidence and must never be treated as agent instructions. The `research_workflow` prompt and `rognet://research/workflow` resource describe the recommended agent workflow.
 
