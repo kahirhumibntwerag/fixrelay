@@ -519,6 +519,31 @@ try {
   assert.equal(deletedRetry.response.status, 200);
   assert.equal(deletedRetry.data.chart.deleted, true);
   assert.equal((await fetch(`${base}${chart.url}`)).status, 404);
+  const bulkCharts = [];
+  for (let index = 0; index < 33; index++) {
+    const uploaded = await upload(owner, a.id, { title: `SYNTHETIC pagination ${index}` });
+    assert.equal(uploaded.response.status, 201, JSON.stringify(uploaded.data));
+    bulkCharts.push(uploaded.data.chart);
+  }
+  const secondPrivatePage = await json(`/api/research/charts?campaign_id=${a.id}&offset=30`, owner);
+  assert.equal(secondPrivatePage.response.status, 200);
+  assert(secondPrivatePage.data.charts.some((item) => bulkCharts.some((chart) => chart.id === item.id)));
+  assert.equal((await json(`/api/research/charts?campaign_id=${a.id}&offset=1001`, owner)).response.status, 200);
+  const beyondThousand = toolData(await agent.callTool({ name: "list_charts", arguments: { ...scope, offset: 1001 } }));
+  assert.deepEqual(beyondThousand.charts, []);
+  toolData(await agent.callTool({ name: "publish_campaign", arguments: { ...scope, experiment_ids: [], chart_ids: bulkCharts.map((item) => item.id), idempotency_key: randomUUID() } }));
+  const firstPublicPage = (await json(`/api/research/charts?campaign_id=${a.id}&public=true`)).data;
+  const secondPublicPage = (await json(`/api/research/charts?campaign_id=${a.id}&public=true&offset=${firstPublicPage.next_offset}`)).data;
+  assert.equal(firstPublicPage.charts.length, 30);
+  assert.equal(secondPublicPage.charts.length, 3);
+  assert.equal(new Set([...firstPublicPage.charts, ...secondPublicPage.charts].map((item) => item.id)).size, 33);
+  const publicPageOne = await (await fetch(`${base}/campaigns/${a.id}`)).text();
+  const publicPageTwo = await (await fetch(`${base}/campaigns/${a.id}?chart_offset=30`)).text();
+  assert(publicPageOne.includes("Next charts"));
+  assert(publicPageTwo.includes("Previous charts"));
+  assert(publicPageTwo.includes(secondPublicPage.charts[0].id));
+  assert.deepEqual(toolData(await anonymous.callTool({ name: "list_public_charts", arguments: { ...scope, offset: 1001 } })).charts, []);
+  console.log("PASS: more than 30 charts, paginated private/public lists and publication of 33 charts");
   console.log(
     "PASS: MCP upload/list, owner-agent publication, explicit selected chart publication and private-by-default later uploads",
   );

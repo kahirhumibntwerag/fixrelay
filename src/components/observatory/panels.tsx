@@ -343,36 +343,47 @@ function SharingPanel({
   const [attempt, setAttempt] = useState({ payload: "", key: "" });
   const [charts, setCharts] = useState<ResearchChart[]>([]);
   const [selectedCharts, setSelectedCharts] = useState<string[]>([]);
+  const selectedChartIds = useRef<string[]>([]);
   const [tables, setTables] = useState<ComparisonTableData[]>([]);
   const [selectedTables, setSelectedTables] = useState<string[]>([]);
   const [loadingCharts, setLoadingCharts] = useState(false);
+  const [nextChartOffset, setNextChartOffset] = useState<number | null>(null);
   const [sharingOpen, setSharingOpen] = useState(false);
+  const chartLoadGeneration = useRef(0);
   const chartEventVersion = data.events.at(-1)?.id;
-  const loadCharts = useCallback(async () => {
+  useEffect(() => { selectedChartIds.current = selectedCharts; }, [selectedCharts]);
+  const loadCharts = useCallback(async (offset = 0) => {
+    const generation = offset === 0 ? ++chartLoadGeneration.current : chartLoadGeneration.current;
     setLoadingCharts(true);
     try {
       const response = await fetch(
-        `/api/research/charts?campaign_id=${encodeURIComponent(data.campaign.id)}`,
+        `/api/research/charts?campaign_id=${encodeURIComponent(data.campaign.id)}&offset=${offset}`,
         { cache: "no-store" },
       );
       const body = await response.json();
       if (!response.ok)
         throw new Error(body.error || "Unable to load charts for publication.");
-      setCharts(body.charts || []);
+      if (generation !== chartLoadGeneration.current) return;
+      setCharts((items) => offset === 0
+        ? [...(body.charts || []), ...items.filter((item) => selectedChartIds.current.includes(item.id) && !body.charts.some((chart: ResearchChart) => chart.id === item.id))]
+        : [...items, ...body.charts.filter((chart: ResearchChart) => !items.some((item) => item.id === chart.id))]);
+      setNextChartOffset(body.next_offset ?? null);
+      if (offset !== 0) return;
       const tablesResponse = await fetch(`/api/research/tables?campaign_id=${encodeURIComponent(data.campaign.id)}`, { cache: "no-store" });
       const tablesBody = await tablesResponse.json();
       if (!tablesResponse.ok) throw new Error(tablesBody.error || "Unable to load tables for publication.");
+      if (generation !== chartLoadGeneration.current) return;
       setTables(tablesBody.tables || []);
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Unable to load charts.",
-      );
+      if (generation === chartLoadGeneration.current)
+        setError(cause instanceof Error ? cause.message : "Unable to load charts.");
     } finally {
-      setLoadingCharts(false);
+      if (generation === chartLoadGeneration.current) setLoadingCharts(false);
     }
   }, [data.campaign.id]);
   useEffect(() => {
     if (sharingOpen) void loadCharts();
+    return () => { chartLoadGeneration.current += 1; };
   }, [sharingOpen, loadCharts, chartEventVersion]);
   async function publish(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -482,7 +493,7 @@ function SharingPanel({
                       <input
                         type="checkbox"
                         checked={selectedCharts.includes(chart.id)}
-                        disabled={!canSelect}
+                        disabled={!canSelect || (selectedCharts.length >= 1000 && !selectedCharts.includes(chart.id))}
                         onChange={(event) =>
                           setSelectedCharts((items) =>
                             event.target.checked
@@ -502,6 +513,8 @@ function SharingPanel({
                     </label>
                   );
                 })}
+                {nextChartOffset !== null && <button type="button" className="obs-link-button" disabled={loadingCharts} onClick={() => void loadCharts(nextChartOffset)}>Load more charts</button>}
+                {selectedCharts.length >= 1000 && <p className="obs-muted">Publish up to 1,000 charts at a time; you can publish more afterwards.</p>}
               </div>
             )}
             {tables.length > 0 && <div className="obs-share-list">

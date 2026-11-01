@@ -65,7 +65,7 @@ export const researchSchemas = {
   publish_campaign: z.object({
     ...scoped,
     experiment_ids: z.array(uuid).max(100).default([]),
-    chart_ids: z.array(uuid).max(30).default([]),
+    chart_ids: z.array(uuid).max(1000).default([]),
     table_ids: z.array(uuid).max(30).default([]),
   }),
   submit_reproduction: z.object({

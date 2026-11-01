@@ -12,7 +12,7 @@ export default async function CampaignPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ offset?: string }>;
+  searchParams: Promise<{ offset?: string; chart_offset?: string }>;
 }) {
   const { id } = await params,
     p = await searchParams;
@@ -22,6 +22,8 @@ export default async function CampaignPage({
     ),
     data = await getCampaign(id, undefined, 10, offset);
   if (!data) notFound();
+  const parsedChartOffset = Number(p.chart_offset || 0);
+  const chartOffset = Number.isSafeInteger(parsedChartOffset) && parsedChartOffset >= 0 ? parsedChartOffset : 0;
   const { tables } = await listComparisonTables({ campaign_id: id, limit: 30 });
   return (
     <article className="content article">
@@ -32,12 +34,12 @@ export default async function CampaignPage({
         key={`${id}:${offset}`}
         initial={data as unknown as CampaignViewData}
       />
-      <PublicResearchCharts campaignId={id} />
+      <PublicResearchCharts campaignId={id} offset={chartOffset} experimentOffset={offset} />
       {tables.length > 0 && <section><h2>Comparison tables</h2>{tables.map((table: ComparisonTableData) => <ComparisonTable key={table.id} table={table} />)}</section>}
       {offset > 0 && (
         <Link
           className="text-link"
-          href={`?offset=${Math.max(0, offset - 10)}`}
+          href={`?offset=${Math.max(0, offset - 10)}&chart_offset=${chartOffset}`}
         >
           ← Previous experiments
         </Link>

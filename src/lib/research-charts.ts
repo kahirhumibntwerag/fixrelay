@@ -13,7 +13,6 @@ import { oauthChallenge } from "./oauth";
 import { canonicalOrigin } from "./oauth-config";
 
 export const MAX_CHART_BYTES = 2 * 1024 * 1024;
-export const MAX_CAMPAIGN_CHARTS = 30;
 const uuid = z.string().uuid();
 const chartFields = {
   campaign_id: uuid,
@@ -34,7 +33,7 @@ export const chartMcpUploadSchema = z.object({
 });
 const chartListSchema = z.object({
   campaign_id: uuid,
-  offset: z.number().int().min(0).max(1000).default(0),
+  offset: z.number().int().min(0).default(0),
   limit: z.number().int().min(1).max(30).default(30),
 });
 type Queryable = Pick<PoolClient, "query">;
@@ -357,15 +356,6 @@ export async function uploadResearchChart(
     await sql.query("SELECT id FROM campaigns WHERE id=$1 FOR UPDATE", [
       p.campaign_id,
     ]);
-    const count = await sql.query(
-      "SELECT count(*)::int AS count FROM research_charts WHERE campaign_id=$1",
-      [p.campaign_id],
-    );
-    if (count.rows[0].count >= MAX_CAMPAIGN_CHARTS)
-      throw new ChartError(
-        "A campaign can contain up to 30 uploaded charts",
-        409,
-      );
     if (p.experiment_id) {
       const found = await sql.query(
         "SELECT id FROM experiments WHERE id=$1 AND campaign_id=$2",
@@ -433,7 +423,7 @@ export async function publishResearchCharts(
   selectedExperimentIds: string[],
 ) {
   uuid.parse(campaignId);
-  const ids = [...new Set(z.array(uuid).max(30).parse(chartIds))];
+  const ids = [...new Set(z.array(uuid).max(1000).parse(chartIds))];
   if (!ids.length) return [];
   const { rows } = await sql.query(
     `SELECT c.id,c.experiment_id,e.visibility FROM research_charts c LEFT JOIN experiments e ON e.id=c.experiment_id WHERE c.campaign_id=$1 AND c.id=ANY($2::uuid[])`,
@@ -645,7 +635,7 @@ export function registerResearchChartTools(
         "List explicitly published charts of a public campaign, without account linking. Returns up to 10 chart summaries with image URLs, optional metric/experiment links and SHA-256 checksums. Captions longer than 240 characters are shortened and marked caption_truncated. Private and unselected charts are never included.",
       inputSchema: z.object({
         campaign_id: uuid,
-        offset: z.number().int().min(0).max(1000).default(0),
+        offset: z.number().int().min(0).default(0),
         limit: z.number().int().min(1).max(10).default(10),
       }),
       annotations: {

@@ -23,9 +23,15 @@ export function ChartsPanel({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [reload, setReload] = useState(0);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const attempt = useRef({ fingerprint: "", key: "" });
+  const generation = useRef(0);
   const eventVersion = data.events.at(-1)?.id;
   useEffect(() => {
+    generation.current += 1;
+    setNextOffset(null);
+    setLoadingMore(false);
     const controller = new AbortController();
     fetch(
       `/api/research/charts?campaign_id=${encodeURIComponent(data.campaign.id)}`,
@@ -40,6 +46,7 @@ export function ChartsPanel({
       .then((body) => {
         if (!controller.signal.aborted) {
           setCharts(body.charts || []);
+          setNextOffset(body.next_offset ?? null);
           setError("");
         }
       })
@@ -51,6 +58,25 @@ export function ChartsPanel({
       });
     return () => controller.abort();
   }, [data.campaign.id, eventVersion, reload]);
+
+  async function loadMore() {
+    if (nextOffset === null || loadingMore) return;
+    const current = generation.current;
+    setLoadingMore(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/research/charts?campaign_id=${encodeURIComponent(data.campaign.id)}&offset=${nextOffset}`, { cache: "no-store" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Unable to load more charts.");
+      if (generation.current !== current) return;
+      setCharts((items) => [...items, ...body.charts.filter((chart: ResearchChart) => !items.some((item) => item.id === chart.id))]);
+      setNextOffset(body.next_offset ?? null);
+    } catch (cause) {
+      if (generation.current === current) setError(cause instanceof Error ? cause.message : "Unable to load more charts.");
+    } finally {
+      if (generation.current === current) setLoadingMore(false);
+    }
+  }
 
   async function upload(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -299,6 +325,7 @@ export function ChartsPanel({
           </p>
         )
       )}
+      {nextOffset !== null && <button type="button" className="obs-link-button" onClick={loadMore} disabled={loadingMore}>{loadingMore ? "Loading charts…" : "Load more charts"}</button>}
     </section>
   );
 }
