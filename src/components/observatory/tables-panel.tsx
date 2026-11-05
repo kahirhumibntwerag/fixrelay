@@ -11,13 +11,14 @@ export function TablesPanel({ data, onUpdated }: { data: Snapshot; onUpdated: ()
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
   const attempt = useRef({ payload: "", key: "" });
   const eventVersion = data.events.at(-1)?.id;
   useEffect(() => {
     const controller = new AbortController();
     fetch(`/api/research/tables?campaign_id=${encodeURIComponent(data.campaign.id)}`, { signal: controller.signal, cache: "no-store" })
       .then(async (response) => { const body = await response.json(); if (!response.ok) throw new Error(body.error || "Unable to load tables."); return body; })
-      .then((body) => setTables(body.tables))
+      .then((body) => { setTables(body.tables); setNextOffset(body.next_offset ?? null); })
       .catch((cause) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Unable to load tables."); });
     return () => controller.abort();
   }, [data.campaign.id, eventVersion]);
@@ -56,7 +57,36 @@ export function TablesPanel({ data, onUpdated }: { data: Snapshot; onUpdated: ()
     </form>}
     {error && <p className="obs-form-error" role="alert">{error}</p>}
     {success && <p className="obs-chart-success" role="status">{success}</p>}
-    {tables.map((table) => <div key={table.id}><ComparisonTable table={table} /><p className="obs-muted">{table.is_public ? "Public" : "Private"}</p>{data.campaign.role === "owner" && <RemoveResearchItem campaignId={data.campaign.id} id={table.id} name={table.title} kind="comparison_table" isPublic={table.is_public} onRemoved={() => { setTables((items) => items.filter((item) => item.id !== table.id)); setSuccess("Table removed."); onUpdated(); }} />}</div>)}
+    {tables.map((table) => <div key={table.id}><ComparisonTable table={table} /><p className="obs-muted">{table.is_public ? "Published version is public; new versions stay private until published." : "Private"}</p><TableVersionForm table={table} campaignId={data.campaign.id} onSaved={onUpdated} />{data.campaign.role === "owner" && <RemoveResearchItem campaignId={data.campaign.id} id={table.id} name={table.title} kind="comparison_table" isPublic={table.is_public} onRemoved={() => { setTables((items) => items.filter((item) => item.id !== table.id)); setSuccess("Table removed."); onUpdated(); }} />}</div>)}
+    {nextOffset !== null && <button className="obs-link-button" type="button" onClick={async () => {
+      try { const response = await fetch(`/api/research/tables?campaign_id=${encodeURIComponent(data.campaign.id)}&offset=${nextOffset}`); const body = await response.json(); if (!response.ok) throw new Error(body.error || "Unable to load tables."); setTables(items => [...items, ...body.tables.filter((table: ComparisonTableData) => !items.some(item => item.id === table.id))]); setNextOffset(body.next_offset ?? null); }
+      catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load tables."); }
+    }}>Load more tables</button>}
     {!tables.length && <p className="obs-muted">Add a table to compare results alongside your metrics.</p>}
   </section>;
+}
+
+function TableVersionForm({table, campaignId, onSaved}: {table: ComparisonTableData; campaignId: string; onSaved: () => void}) {
+  const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const attempt = useRef({payload: "", key: ""});
+  const latest = table.versions?.at(-1) ?? table;
+  const initial = [latest.columns, ...latest.rows].map(row => row.map(cell => cell ?? "").join("\t")).join("\n");
+  async function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const fields = new FormData(event.currentTarget);
+    const [columns, ...rows] = String(fields.get("data") || "").replace(/\r\n?/g,"\n").split("\n").filter(line => line.trim()).map(line => line.split("\t").map(cell => cell.trim()));
+    if (!columns || columns.length < 2 || !rows.length || rows.some(row => row.length !== columns.length)) {setError("Each row needs the same number of cells as the header."); return;}
+    const input = {campaign_id: campaignId, table_id: table.id, columns, rows, note: String(fields.get("note") || "")};
+    const payload = JSON.stringify(input);
+    if (attempt.current.payload !== payload) attempt.current = {payload, key: crypto.randomUUID()};
+    setBusy(true); setError("");
+    try {const response = await fetch("/api/research", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"add_comparison_table_version",input,idempotency_key:attempt.current.key})}); const body = await response.json(); if (!response.ok) throw new Error(body.error || "Unable to save version."); setOpen(false); onSaved();}
+    catch (cause) {setError(cause instanceof Error ? cause.message : "Unable to save version.");} finally {setBusy(false);}
+  }
+  return <div><button type="button" className="obs-link-button" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Cancel update" : "Add a version"}</button>{open && <form className="obs-chart-form" onSubmit={save}>
+    <label>Table data<textarea name="data" required rows={7} defaultValue={initial} /></label>
+    <label>What changed? (optional)<input name="note" maxLength={6000} /></label>
+    <p className="obs-upload-hint">Keep the first column and column names consistent to compare versions. The new version remains private until you publish it.</p>
+    {error && <p role="alert" className="obs-form-error">{error}</p>}<button className="obs-button obs-primary" disabled={busy}>{busy ? "Saving…" : "Save version"}</button>
+  </form>}</div>;
 }

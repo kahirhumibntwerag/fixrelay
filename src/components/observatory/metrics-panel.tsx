@@ -227,15 +227,23 @@ function MetricGraph({
     ? metric.evaluation_protocol
     : points.at(-1)?.conditions_key || "";
   const [selection, setSelection] = useState<string | null>(null);
+  const [start, setStart] = useState(0);
+  const [end, setEnd] = useState<number | null>(null);
+  const [chartType, setChartType] = useState<"line" | "scatter" | "bar">("line");
   const condition =
     selection !== null && conditions.includes(selection)
       ? selection
       : defaultCondition;
-  const series = points.filter(
+  const allSeries = points.filter(
     (item) => (item.conditions_key || "") === condition,
   );
+  const lastIndex = Math.max(0, allSeries.length - 1);
+  const firstIndex = Math.min(start, lastIndex);
+  const finalIndex = Math.max(firstIndex, Math.min(end ?? lastIndex, lastIndex));
+  const series = allSeries.slice(firstIndex, finalIndex + 1);
   const comparable = condition === metric.evaluation_protocol;
   const values = series.map((point) => Number(point.value));
+  if (chartType === "bar") values.push(0);
   if (comparable) {
     values.push(Number(metric.target));
     if (metric.target_max != null) values.push(Number(metric.target_max));
@@ -253,10 +261,15 @@ function MetricGraph({
       135;
   const left = 88,
     right = plotWidth - 20;
+  const firstTime = new Date(series[0].created_at).valueOf();
+  const lastTime = new Date(series[series.length - 1].created_at).valueOf();
   const x = (index: number) =>
-    series.length === 1
-      ? (left + right) / 2
+    series.length === 1 ? (left + right) / 2 : lastTime > firstTime
+      ? left + ((new Date(series[index].created_at).valueOf() - firstTime) / (lastTime - firstTime)) * (right - left)
       : left + index * ((right - left) / (series.length - 1));
+  const runExperiments = new Map(data.runs.map(run => [run.id,run.experiment_id]));
+  const experimentIds = [...new Set(series.map(point => runExperiments.get(point.run_id) || point.run_id))];
+  const colors = ["#83bce5", "#b5ed83", "#f0b67f", "#d4a7ed", "#75d5cc", "#f28f9d"];
   const conditionName = (key: string, index: number) =>
     key === metric.evaluation_protocol
       ? "Registered evaluation"
@@ -270,7 +283,7 @@ function MetricGraph({
           Evaluation
           <select
             value={condition}
-            onChange={(event) => setSelection(event.target.value)}
+            onChange={(event) => { setSelection(event.target.value); setStart(0); setEnd(null); }}
           >
             {conditions.map((key, index) => (
               <option key={key} value={key}>
@@ -287,6 +300,14 @@ function MetricGraph({
             : "Evaluation conditions were not recorded."}
         </p>
       )}
+      <div className="obs-chart-controls">
+        <label>Chart type <select value={chartType} onChange={event => setChartType(event.target.value as typeof chartType)}><option value="line">Line</option><option value="scatter">Points</option><option value="bar">Bars</option></select></label>
+        {allSeries.length > 1 && <>
+          <label>From {date(allSeries[firstIndex].created_at)}<input type="range" min={0} max={lastIndex} value={firstIndex} onChange={event => { const next = Number(event.target.value); setStart(next); if (end !== null && next > end) setEnd(next); }} aria-label={`${metric.name} start time`} /></label>
+          <label>To {date(allSeries[finalIndex].created_at)}<input type="range" min={firstIndex} max={lastIndex} value={finalIndex} onChange={event => setEnd(Number(event.target.value))} aria-label={`${metric.name} end time`} /></label>
+        </>}
+      </div>
+      {series.length > 1 && <p className="obs-metric-context">First to last: {numeric(series[0].value)} → {numeric(series.at(-1)?.value)}{unitLabel(metric.unit)} ({Number(series.at(-1)?.value) - Number(series[0].value) > 0 ? "+" : ""}{numeric(Number(series.at(-1)?.value) - Number(series[0].value))}). Measurements may come from different experiments.</p>}
       <div
         ref={plotRef}
         className="obs-metric-plot"
@@ -333,23 +354,14 @@ function MetricGraph({
               )}
             </>
           )}
-          {!!condition && series.length > 1 && (
-            <polyline
-              points={series
-                .map((point, index) => `${x(index)},${y(Number(point.value))}`)
-                .join(" ")}
-              fill="none"
-              stroke="#83bce5"
-              strokeWidth="3"
-            />
-          )}
+          {chartType === "line" && !!condition && experimentIds.map((experimentId, group) => <polyline key={experimentId} points={series.map((point,index) => ({point,index})).filter(({point}) => (runExperiments.get(point.run_id) || point.run_id) === experimentId).map(({point,index}) => `${x(index)},${y(Number(point.value))}`).join(" ")} fill="none" stroke={colors[group % colors.length]} strokeDasharray={group % 2 ? "6 4" : undefined} strokeWidth="3" />)}
           {series.map((point, index) => (
-            <circle
+            chartType === "bar" ? <rect key={point.id} x={x(index)-4} y={Math.min(y(Number(point.value)),y(0))} width="8" height={Math.max(1,Math.abs(y(Number(point.value))-y(0)))} fill={colors[experimentIds.indexOf(runExperiments.get(point.run_id) || point.run_id) % colors.length]}><title>{numeric(point.value)}{unitLabel(metric.unit)} · {date(point.created_at)}</title></rect> : <circle
               key={point.id}
               cx={x(index)}
               cy={y(Number(point.value))}
               r="5"
-              fill="#83bce5"
+              fill={colors[experimentIds.indexOf(runExperiments.get(point.run_id) || point.run_id) % colors.length]}
             >
               <title>
                 {numeric(point.value)}
@@ -378,6 +390,7 @@ function MetricGraph({
           )}
         </div>
       )}
+      {experimentIds.length > 1 && <div className="obs-chart-series" aria-label="Experiments in this chart">{experimentIds.map((id,index) => <span key={id}><i style={{backgroundColor: colors[index % colors.length]}} />{data.experiments.find(item => item.id === id)?.title || "Run"}{index % 2 ? " (dashed)" : ""}</span>)}</div>}
       <details className="obs-details">
         <summary>Measurements ({series.length})</summary>
         <div className="obs-metric-table-wrap">

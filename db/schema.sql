@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS experiment_links (
 CREATE INDEX IF NOT EXISTS experiment_links_child_idx ON experiment_links(child_id);
 -- statement
 CREATE OR REPLACE FUNCTION link_campaign_experiments(cid uuid,pid uuid,kid uuid,owner text,kind text,why text)
-RETURNS boolean LANGUAGE plpgsql AS $$
+RETURNS boolean LANGUAGE plpgsql SET search_path FROM CURRENT AS $$
 BEGIN
  PERFORM 1 FROM campaigns WHERE id=cid AND owner_hash=owner FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Campaign inaccessible'; END IF;

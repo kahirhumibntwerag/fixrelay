@@ -6,6 +6,7 @@ import { mcp } from "@better-auth/mcp";
 import { cimd } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { APIError } from "better-auth/api";
+import { databaseUrl } from "./database-config";
 import {
   canonicalOrigin,
   canonicalMcpResource,
@@ -18,19 +19,35 @@ let instance: ReturnType<typeof createAuth> | undefined;
 
 export function authConfigured() {
   return Boolean(
-    process.env.DATABASE_URL &&
+    databaseUrl() &&
       process.env.BETTER_AUTH_SECRET &&
       process.env.BETTER_AUTH_SECRET.length >= 32,
   );
 }
 
 export function getAuthPool() {
-  if (!process.env.DATABASE_URL)
+  const connectionString = databaseUrl();
+  if (!connectionString)
     throw Object.assign(new Error("Database is not configured."), {
       status: 503,
     });
+  const schema = process.env.DATABASE_SCHEMA;
+  if (schema && !/^[a-z_][a-z0-9_]{0,62}$/.test(schema))
+    throw new Error("DATABASE_SCHEMA must be a lowercase PostgreSQL identifier.");
+  const address = new URL(connectionString);
+  if (schema && address.hostname.endsWith(".pooler.supabase.com") && address.port === "6543")
+    throw new Error("A private schema requires Supabase's session pooler, not transaction mode.");
+  const ca = process.env.DATABASE_CA_CERT;
+  if (ca) {
+    // pg's URL sslmode overrides the explicit SSL object, so remove it when
+    // providing a trusted CA. Verification remains enabled.
+    address.searchParams.delete("sslmode");
+    address.searchParams.delete("sslrootcert");
+  }
   pool ??= new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: address.toString(),
+    ...(ca ? { ssl: { ca, rejectUnauthorized: true } } : {}),
+    ...(schema ? { options: `-c search_path=${schema}` } : {}),
     max: 5,
     idleTimeoutMillis: 20_000,
     connectionTimeoutMillis: 15_000,

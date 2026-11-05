@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       const { value, done } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > 100000) {
+      if (size > 512000) {
         await reader.cancel();
         return Response.json({ error: "Request too large" }, { status: 413 });
       }

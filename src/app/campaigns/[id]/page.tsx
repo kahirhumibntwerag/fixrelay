@@ -6,6 +6,7 @@ import { type CampaignViewData } from "@/components/campaign-view";
 import { PublicResearchCharts } from "@/components/public-research-charts";
 import { ComparisonTable, type ComparisonTableData } from "@/components/comparison-table";
 import { listComparisonTables } from "@/lib/research-tables";
+import { PublicSeriesChartsPanel } from "@/components/observatory/series-charts-panel";
 export const dynamic = "force-dynamic";
 export default async function CampaignPage({
   params,
@@ -35,6 +36,7 @@ export default async function CampaignPage({
         initial={data as unknown as CampaignViewData}
       />
       <PublicResearchCharts campaignId={id} offset={chartOffset} experimentOffset={offset} />
+      <PublicSeriesChartsPanel campaignId={id} />
       {tables.length > 0 && <section><h2>Comparison tables</h2>{tables.map((table: ComparisonTableData) => <ComparisonTable key={table.id} table={table} />)}</section>}
       {offset > 0 && (
         <Link

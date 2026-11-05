@@ -230,3 +230,17 @@
     grid-template-columns: 1fr;
   }
 }
+.obs-chart-controls { display: grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); gap: 12px; margin: 14px 0; }
+.obs-chart-controls label { display: grid; gap: 6px; font-size: 0.84rem; color: var(--muted); }
+.obs-chart-controls input[type=range] { width: 100%; }
+.obs-chart-series { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: .8rem; margin-top: 8px; }
+.obs-chart-series span { display: inline-flex; align-items: center; gap: 5px; }
+.obs-chart-series i { width: 12px; height: 3px; display: inline-block; }
+.obs-series-card { border-top: 1px solid var(--border); padding: 20px 0; }
+.obs-series-card h3 { margin: 0; }
+.obs-series-card p { color: var(--muted); }
+.obs-series-toggles { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 12px 0; }
+.obs-series-toggles label { display: inline-flex; align-items: center; gap: 6px; }
+.obs-series-toggles i { width: 12px; height: 4px; display: inline-block; }
+.obs-series-plot { width: 100%; overflow: hidden; }
+.obs-series-plot svg { width: 100%; min-height: 180px; font-size: 12px; }

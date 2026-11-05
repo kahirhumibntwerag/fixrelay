@@ -1,9 +1,10 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { getAuthPool } from "./auth";
+import { databaseUrl } from "./database-config";
 
 type Row = Record<string, any>;
-// The Neon HTTP driver requires a Neon endpoint. This lazy adapter gives the
-// existing tagged queries the same transaction behavior on local PostgreSQL.
+// The Neon HTTP driver only works with Neon hosts. Other PostgreSQL providers
+// use the same pooled driver as authentication, including transactions.
 class LocalQuery implements PromiseLike<Row[]> {
   constructor(
     readonly text: string,
@@ -47,9 +48,10 @@ localTag.transaction = async (queries: LocalQuery[]) => {
   }
 };
 export function registryDb() {
-  if (!process.env.DATABASE_URL) throw new Error("Database is not configured");
-  const host = new URL(process.env.DATABASE_URL).hostname;
-  return ["localhost", "127.0.0.1", "[::1]"].includes(host)
-    ? (localTag as unknown as NeonQueryFunction<false, false>)
-    : neon(process.env.DATABASE_URL);
+  const connectionString = databaseUrl();
+  if (!connectionString) throw new Error("Database is not configured");
+  const host = new URL(connectionString).hostname;
+  return host.endsWith(".neon.tech") && !process.env.DATABASE_SCHEMA
+    ? neon(connectionString)
+    : (localTag as unknown as NeonQueryFunction<false, false>);
 }

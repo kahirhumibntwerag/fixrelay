@@ -105,12 +105,12 @@ CREATE TABLE IF NOT EXISTS research_mutations (
  response jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(user_id,idempotency_key)
 );
 -- statement
-CREATE OR REPLACE FUNCTION research_prevent_rewrite() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION research_prevent_rewrite() RETURNS trigger LANGUAGE plpgsql SET search_path FROM CURRENT AS $$
 BEGIN RAISE EXCEPTION 'Research history is append-only; append an explicit correction'; END $$;
 -- statement
 DO $$ DECLARE t text; BEGIN
  FOREACH t IN ARRAY ARRAY['research_events','research_observations','research_analyses','research_decisions'] LOOP
-  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgname=t || '_immutable') THEN
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgname=t || '_immutable' AND tgrelid=to_regclass(t)) THEN
    EXECUTE format('CREATE TRIGGER %I BEFORE UPDATE OR DELETE ON %I FOR EACH ROW EXECUTE FUNCTION research_prevent_rewrite()', t || '_immutable', t);
   END IF;
  END LOOP;

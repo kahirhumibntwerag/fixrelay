@@ -14,6 +14,10 @@ import {
   X,
 } from "lucide-react";
 import type { Campaign, Snapshot } from "./types";
+import { MetricsPanel } from "./metrics-panel";
+import { ChartsPanel } from "./charts-panel";
+import { TablesPanel } from "./tables-panel";
+import { SeriesChartsPanel } from "./series-charts-panel";
 import {
   ActivityPanel,
   ExperimentPanel,
@@ -24,8 +28,8 @@ import {
 
 type Tab = "overview" | "hypotheses" | "experiments" | "activity" | "review";
 const tabs = [
+  { id: "hypotheses", label: "Research map", icon: GitBranch },
   { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "hypotheses", label: "Hypotheses", icon: GitBranch },
   { id: "experiments", label: "Experiments", icon: FlaskConical },
   { id: "activity", label: "Activity", icon: Activity },
   { id: "review", label: "Review", icon: ShieldCheck },
@@ -61,7 +65,7 @@ export function Observatory({
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaignId, setCampaignId] = useState(initialCampaign || "");
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>("hypotheses");
   const [selectedExperiment, setSelectedExperiment] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -155,7 +159,7 @@ export function Observatory({
     setCampaigns((items) => [campaign, ...items]);
     setCampaignId(campaign.id);
     setCreating(false);
-    setTab("overview");
+    setTab("hypotheses");
   };
   function navigateTab(event: React.KeyboardEvent<HTMLDivElement>) {
     const index = tabs.findIndex((item) => item.id === tab);
@@ -334,7 +338,14 @@ export function Observatory({
                 }}
               />
             )}
-            {tab === "hypotheses" && <HypothesisPanel data={snapshot} />}
+            {tab === "hypotheses" && <div className="obs-map-workspace">
+              <div className="obs-map-intro"><div><span className="obs-eyebrow">Research question</span><h2>{snapshot.campaign.question}</h2>{snapshot.brief && <p className="obs-agent-status">Agent handoff {snapshot.brief.stale ? "needs an update" : "is up to date"}.</p>}</div><span className="obs-private">{snapshot.campaign.visibility}</span></div>
+              <HypothesisPanel data={snapshot} />
+              <MetricsPanel data={snapshot} onUpdated={refresh} onInspectExperiment={id => {setSelectedExperiment(id); setTab("experiments");}} />
+              <SeriesChartsPanel data={snapshot} onUpdated={refresh} />
+              <ChartsPanel data={snapshot} onUpdated={refresh} />
+              <TablesPanel data={snapshot} onUpdated={refresh} />
+            </div>}
             {tab === "experiments" && (
               <ExperimentPanel
                 data={snapshot}

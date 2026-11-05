@@ -44,7 +44,9 @@ export async function GET(request: Request) {
               cursor = event.id;
             }
             controller.enqueue(encoder.encode(": heartbeat\n\n"));
-            await new Promise((resolve) => setTimeout(resolve, 2000));
+            // A short delay keeps the workspace current without querying the
+            // shared database continuously for every open browser tab.
+            await new Promise((resolve) => setTimeout(resolve, 5000));
             if (cancelled) break;
             // Recheck current credentials on each poll: revoked keys/sessions cannot keep a stream open.
             pending = await researchEvents(

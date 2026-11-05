@@ -13,6 +13,7 @@
     "test:campaigns": "node --env-file=.env.local scripts/test-campaigns.mjs",
     "test:reproduction-status": "node --experimental-strip-types scripts/test-reproduction-status.mjs",
     "test:research": "node scripts/test-research.mjs",
+    "test:campaign-workspace": "node scripts/test-campaign-workspace.mjs",
     "test:auth": "node scripts/test-auth.mjs",
     "test:metrics": "node --experimental-strip-types scripts/test-research-metrics.mjs",
     "test:charts": "node scripts/test-charts.mjs",

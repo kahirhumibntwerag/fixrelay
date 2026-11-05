@@ -10,6 +10,7 @@ const uuid = z.string().uuid();
 const text = z.string().trim().min(1).max(6000);
 const short = z.string().trim().min(1).max(200);
 const optionalText = z.string().trim().max(6000).default("");
+const briefText = z.string().trim().max(12000).default("");
 const json = z
   .record(z.string().max(100), z.json())
   .refine(
@@ -51,12 +52,44 @@ export const researchSchemas = {
   remove_metric: z.object({ ...scoped, metric_id: uuid }),
   remove_chart: z.object({ ...scoped, chart_id: uuid }),
   remove_comparison_table: z.object({ ...scoped, table_id: uuid }),
+  create_series_chart: z.object({
+    ...scoped, title: short, caption: optionalText,
+    x_label: short.default("Step"), y_label: short.default("Value"),
+    unit: z.string().trim().max(80).default(""),
+    chart_type: z.enum(["line", "scatter", "bar"]).default("line"),
+  }),
+  append_series_points: z.object({
+    ...scoped, chart_id: uuid,
+    points: z.array(z.object({series: short, x: z.number().finite(), y: z.number().finite(),
+      observed_at: z.iso.datetime({offset: true}), run_id: uuid.optional(), note: z.string().max(1000).default("")})).min(1).max(1000),
+  }),
+  update_campaign_brief: z.object({
+    ...scoped,
+    overview: z.string().trim().min(1).max(12000),
+    findings: z.string().trim().min(1).max(12000),
+    methods_and_protocols: briefText,
+    experiments: briefText,
+    decisions: briefText,
+    reproducibility: briefText,
+    failed_approaches: briefText,
+    limitations: briefText,
+    open_questions: briefText,
+    next_steps: briefText,
+    evidence_ids: z.array(uuid).max(100).default([]),
+  }),
   create_comparison_table: z.object({
     ...scoped,
     title: short,
     caption: optionalText,
     columns: z.array(short).min(2).max(20),
     rows: z.array(z.array(z.union([z.string().max(200), z.number().finite(), z.null()])).min(2).max(20)).min(1).max(100),
+  }),
+  add_comparison_table_version: z.object({
+    ...scoped,
+    table_id: uuid,
+    columns: z.array(short).min(2).max(20),
+    rows: z.array(z.array(z.union([z.string().max(200), z.number().finite(), z.null()])).min(2).max(20)).min(1).max(100),
+    note: optionalText,
   }),
   claim_campaign: z.object({
     ...scoped,
@@ -353,7 +386,7 @@ export async function mutateResearch(
     );
   if (action === "create_campaign" && !!p.metric === !!p.metrics)
     throw new ResearchError("Provide either metric or metrics, but not both");
-  if (action === "create_comparison_table") {
+  if (action === "create_comparison_table" || action === "add_comparison_table_version") {
     if (!p.rows.every((row: unknown[]) => row.length === p.columns.length))
       throw new ResearchError("Each row must have one cell per column");
     if (JSON.stringify({ columns: p.columns, rows: p.rows }).length > 30000)
@@ -520,14 +553,57 @@ export async function mutateResearch(
       };
       description = "Research campaign created: " + p.title;
     } else if (action === "create_comparison_table") {
-      const count = await sql.query("SELECT count(*)::int AS count FROM research_comparison_tables WHERE campaign_id=$1", [campaignId]);
-      if (count.rows[0].count >= 30) throw new ResearchError("A campaign can contain up to 30 comparison tables", 409);
       const inserted = await sql.query(
         `INSERT INTO research_comparison_tables(campaign_id,title,caption,column_headers,data_rows,created_by) VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,
         [campaignId, p.title, p.caption, JSON.stringify(p.columns), JSON.stringify(p.rows), principal.userId],
       );
+      await sql.query(`INSERT INTO research_comparison_versions(table_id,version,column_headers,data_rows,created_by) VALUES($1,1,$2,$3,$4)`,
+        [inserted.rows[0].id,JSON.stringify(p.columns),JSON.stringify(p.rows),principal.userId]);
       result = { id: inserted.rows[0].id, table_id: inserted.rows[0].id, visibility: "private" };
       description = "Comparison table created: " + p.title;
+    } else if (action === "add_comparison_table_version") {
+      const table = await sql.query("SELECT id,title FROM research_comparison_tables WHERE id=$1 AND campaign_id=$2 FOR UPDATE", [p.table_id,campaignId]);
+      if (!table.rows[0]) throw new ResearchError("Table not found in this campaign", 404);
+      const inserted = await sql.query(
+        `INSERT INTO research_comparison_versions(table_id,version,column_headers,data_rows,note,created_by)
+         SELECT $1,coalesce(max(version),0)+1,$2,$3,$4,$5 FROM research_comparison_versions WHERE table_id=$1 RETURNING id,version`,
+        [p.table_id,JSON.stringify(p.columns),JSON.stringify(p.rows),p.note,principal.userId],
+      );
+      result = { id: inserted.rows[0].id, table_id: p.table_id, version: inserted.rows[0].version };
+      description = "Comparison table updated: " + table.rows[0].title;
+    } else if (action === "update_campaign_brief") {
+      await checkEvidence(sql, p.evidence_ids, campaignId);
+      const checkpoint = await sql.query(
+        "SELECT coalesce(max(id),0)::text AS id FROM research_events WHERE campaign_id=$1",
+        [campaignId],
+      );
+      const inserted = await sql.query(
+        `INSERT INTO research_campaign_briefs(campaign_id,overview,findings,methods_and_protocols,experiments,decisions,reproducibility,failed_approaches,limitations,open_questions,next_steps,evidence_ids,author,author_user_id,based_on_event_id)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
+        [campaignId,p.overview,p.findings,p.methods_and_protocols,p.experiments,p.decisions,p.reproducibility,p.failed_approaches,p.limitations,p.open_questions,p.next_steps,p.evidence_ids,principal.name,principal.userId,checkpoint.rows[0].id],
+      );
+      result = { id: inserted.rows[0].id, based_on_event_id: checkpoint.rows[0].id };
+      description = "Campaign brief updated";
+    } else if (action === "create_series_chart") {
+      const inserted = await sql.query(
+        `INSERT INTO research_series_charts(campaign_id,title,caption,x_label,y_label,unit,chart_type,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+        [campaignId,p.title,p.caption,p.x_label,p.y_label,p.unit,p.chart_type,principal.userId],
+      );
+      result = { id: inserted.rows[0].id, chart_id: inserted.rows[0].id, visibility: "private" };
+      description = "Interactive chart created: " + p.title;
+    } else if (action === "append_series_points") {
+      const found = await sql.query("SELECT id,title FROM research_series_charts WHERE id=$1 AND campaign_id=$2 FOR UPDATE", [p.chart_id,campaignId]);
+      if (!found.rows[0]) throw new ResearchError("Chart not found in this campaign", 404);
+      const runIds = [...new Set((p.points as {run_id?: string}[]).map(point => point.run_id).filter(Boolean))];
+      if (runIds.length) {
+        const runs = await sql.query(`SELECT r.id FROM research_runs r JOIN experiments e ON e.id=r.experiment_id WHERE e.campaign_id=$1 AND r.id=ANY($2::uuid[])`, [campaignId,runIds]);
+        if (runs.rows.length !== runIds.length) throw new ResearchError("Each linked run must belong to this campaign", 404);
+      }
+      await sql.query(`INSERT INTO research_series_points(chart_id,series,x,y,observed_at,run_id,note)
+        SELECT $1,p.series,p.x,p.y,p.observed_at,p.run_id,p.note FROM jsonb_to_recordset($2::jsonb)
+        AS p(series text,x double precision,y double precision,observed_at timestamptz,run_id uuid,note text)`, [p.chart_id,JSON.stringify(p.points)]);
+      result = { id: p.chart_id, chart_id: p.chart_id, points_added: p.points.length };
+      description = `Added ${p.points.length} points to ${found.rows[0].title}`;
     } else if (action === "remove_metric") {
       const found = await sql.query(
         "SELECT id,name FROM research_metrics WHERE id=$1 AND campaign_id=$2",
@@ -551,7 +627,8 @@ export async function mutateResearch(
       const isChart = action === "remove_chart";
       const id = isChart ? p.chart_id : p.table_id;
       const table = isChart ? "research_charts" : "research_comparison_tables";
-      const removed = await sql.query(`DELETE FROM ${table} WHERE id=$1 AND campaign_id=$2 RETURNING id,title,published_at`, [id, campaignId]);
+      let removed = await sql.query(`DELETE FROM ${table} WHERE id=$1 AND campaign_id=$2 RETURNING id,title,published_at`, [id, campaignId]);
+      if (isChart && !removed.rows.length) removed = await sql.query("DELETE FROM research_series_charts WHERE id=$1 AND campaign_id=$2 RETURNING id,title,published_at", [id,campaignId]);
       if (!removed.rows[0]) throw new ResearchError(`${isChart ? "Chart" : "Table"} not found in this campaign`, 404);
       result = { id, removed: true, was_published: !!removed.rows[0].published_at };
       description = `${isChart ? "Chart" : "Comparison table"} removed: ${removed.rows[0].title}`;
@@ -695,18 +772,22 @@ export async function mutateResearch(
         );
       if (p.chart_ids.length) {
         const { publishResearchCharts } = await import("./research-charts");
-        await publishResearchCharts(
-          sql,
-          campaignId,
-          p.chart_ids,
-          p.experiment_ids,
-        );
+        const ids = [...new Set(p.chart_ids as string[])];
+        const series = await sql.query("SELECT id FROM research_series_charts WHERE campaign_id=$1 AND id=ANY($2::uuid[])",[campaignId,ids]);
+        const seriesIds = series.rows.map(row => row.id);
+        const imageIds = ids.filter(id => !seriesIds.includes(id));
+        await publishResearchCharts(sql,campaignId,imageIds,p.experiment_ids);
+        if (seriesIds.length) await sql.query(`UPDATE research_series_charts s SET published_at=coalesce(s.published_at,now()),
+          published_through=coalesce((SELECT max(id) FROM research_series_points WHERE chart_id=s.id),0)
+          WHERE s.campaign_id=$1 AND s.id=ANY($2::uuid[])`,[campaignId,seriesIds]);
       }
       if (p.table_ids.length) {
         const ids = [...new Set(p.table_ids as string[])];
         const found = await sql.query("SELECT id FROM research_comparison_tables WHERE campaign_id=$1 AND id=ANY($2::uuid[])", [campaignId, ids]);
         if (found.rows.length !== ids.length) throw new ResearchError("A selected table does not belong to this campaign", 404);
-        await sql.query("UPDATE research_comparison_tables SET published_at=coalesce(published_at,now()) WHERE campaign_id=$1 AND id=ANY($2::uuid[])", [campaignId, ids]);
+        await sql.query(`UPDATE research_comparison_tables t SET published_at=coalesce(t.published_at,now()),
+          (column_headers,data_rows)=(SELECT v.column_headers,v.data_rows FROM research_comparison_versions v WHERE v.table_id=t.id ORDER BY v.version DESC LIMIT 1)
+          WHERE t.campaign_id=$1 AND t.id=ANY($2::uuid[])`, [campaignId, ids]);
       }
       await sql.query(`UPDATE campaigns SET visibility='public' WHERE id=$1`, [
         campaignId,
@@ -1222,8 +1303,13 @@ export async function mutateResearch(
     }
     entityId = (result.id as string) || entityId;
     // Never include access tokens in the audit event or response cache.
-    const { access_token: secret, ...auditInput } = p;
+    const { access_token: secret, points: chartPoints, ...auditInput } = p;
     void secret;
+    if (chartPoints) auditInput.points_added = chartPoints.length;
+    if (action === "update_campaign_brief") {
+      for (const field of ["overview","findings","methods_and_protocols","experiments","decisions","reproducibility","failed_approaches","limitations","open_questions","next_steps"]) delete auditInput[field];
+      auditInput.brief_id = result.id;
+    }
     const event = await sql.query(
       `INSERT INTO research_events(campaign_id,entity_id,event_type,actor,actor_user_id,description,payload)
       VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
@@ -1406,6 +1492,12 @@ export async function researchSnapshot(
     });
     const best = metricResults[0]?.best_result ?? null;
     const verified = metricResults[0]?.best_verified_result ?? null;
+    const brief = (await sql.query(
+      `SELECT b.id,b.author,b.created_at,
+        EXISTS(SELECT 1 FROM research_events e WHERE e.campaign_id=b.campaign_id AND e.id>b.based_on_event_id AND e.event_type<>'update_campaign_brief') AS stale
+       FROM research_campaign_briefs b WHERE b.campaign_id=$1 ORDER BY b.created_at DESC,b.id DESC LIMIT 1`,
+      [campaignId],
+    )).rows[0] ?? null;
     await sql.query("COMMIT");
     return {
       campaign,
@@ -1420,6 +1512,7 @@ export async function researchSnapshot(
       events,
       artifacts,
       reproduction,
+      brief,
       summary: {
         ...totals,
         best_result: best,

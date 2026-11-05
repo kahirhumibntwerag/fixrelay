@@ -342,9 +342,12 @@ function SharingPanel({
     [success, setSuccess] = useState(false);
   const [attempt, setAttempt] = useState({ payload: "", key: "" });
   const [charts, setCharts] = useState<ResearchChart[]>([]);
+  const [seriesCharts, setSeriesCharts] = useState<{id:string;title:string;published_at:string|null}[]>([]);
+  const [nextSeriesOffset, setNextSeriesOffset] = useState<number | null>(null);
   const [selectedCharts, setSelectedCharts] = useState<string[]>([]);
   const selectedChartIds = useRef<string[]>([]);
   const [tables, setTables] = useState<ComparisonTableData[]>([]);
+  const [nextTableOffset, setNextTableOffset] = useState<number | null>(null);
   const [selectedTables, setSelectedTables] = useState<string[]>([]);
   const [loadingCharts, setLoadingCharts] = useState(false);
   const [nextChartOffset, setNextChartOffset] = useState<number | null>(null);
@@ -369,11 +372,18 @@ function SharingPanel({
         : [...items, ...body.charts.filter((chart: ResearchChart) => !items.some((item) => item.id === chart.id))]);
       setNextChartOffset(body.next_offset ?? null);
       if (offset !== 0) return;
-      const tablesResponse = await fetch(`/api/research/tables?campaign_id=${encodeURIComponent(data.campaign.id)}`, { cache: "no-store" });
+      const tablesResponse = await fetch(`/api/research/tables?campaign_id=${encodeURIComponent(data.campaign.id)}&limit=30`, { cache: "no-store" });
       const tablesBody = await tablesResponse.json();
       if (!tablesResponse.ok) throw new Error(tablesBody.error || "Unable to load tables for publication.");
       if (generation !== chartLoadGeneration.current) return;
       setTables(tablesBody.tables || []);
+      setNextTableOffset(tablesBody.next_offset ?? null);
+      const seriesResponse = await fetch(`/api/research/series?campaign_id=${encodeURIComponent(data.campaign.id)}&limit=50`, {cache:"no-store"});
+      const seriesBody = await seriesResponse.json();
+      if (!seriesResponse.ok) throw new Error(seriesBody.error || "Unable to load interactive charts.");
+      if (generation !== chartLoadGeneration.current) return;
+      setSeriesCharts(seriesBody.charts || []);
+      setNextSeriesOffset(seriesBody.next_offset ?? null);
     } catch (cause) {
       if (generation === chartLoadGeneration.current)
         setError(cause instanceof Error ? cause.message : "Unable to load charts.");
@@ -517,12 +527,15 @@ function SharingPanel({
                 {selectedCharts.length >= 1000 && <p className="obs-muted">Publish up to 1,000 charts at a time; you can publish more afterwards.</p>}
               </div>
             )}
+            {seriesCharts.length > 0 && <div className="obs-share-list"><h3>Interactive charts</h3>{seriesCharts.map(chart => <label key={chart.id}><input type="checkbox" checked={selectedCharts.includes(chart.id)} disabled={selectedCharts.length >= 1000 && !selectedCharts.includes(chart.id)} onChange={event => setSelectedCharts(items => event.target.checked ? [...items,chart.id] : items.filter(id => id !== chart.id))}/><span>{chart.title}<small>Publish all currently recorded points</small></span></label>)}{nextSeriesOffset !== null && <button type="button" className="obs-link-button" onClick={async () => {try {const response=await fetch(`/api/research/series?campaign_id=${encodeURIComponent(data.campaign.id)}&limit=50&offset=${nextSeriesOffset}`);const body=await response.json();if(!response.ok)throw new Error(body.error || "Unable to load charts.");setSeriesCharts(items=>[...items,...body.charts.filter((chart:{id:string})=>!items.some(item=>item.id===chart.id))]);setNextSeriesOffset(body.next_offset ?? null);}catch(cause){setError(cause instanceof Error?cause.message:"Unable to load charts.");}}}>Load more interactive charts</button>}</div>}
             {tables.length > 0 && <div className="obs-share-list">
               <h3>Comparison tables</h3>
               {tables.map((table) => <label key={table.id}>
-                <input type="checkbox" checked={selectedTables.includes(table.id)} onChange={(event) => setSelectedTables((items) => event.target.checked ? [...items, table.id] : items.filter((id) => id !== table.id))} />
+                <input type="checkbox" checked={selectedTables.includes(table.id)} disabled={selectedTables.length >= 30 && !selectedTables.includes(table.id)} onChange={(event) => setSelectedTables((items) => event.target.checked ? [...items, table.id] : items.filter((id) => id !== table.id))} />
                 <span>{table.title}<small>Include this table</small></span>
               </label>)}
+              {nextTableOffset !== null && <button type="button" className="obs-link-button" onClick={async () => {try {const response=await fetch(`/api/research/tables?campaign_id=${encodeURIComponent(data.campaign.id)}&limit=30&offset=${nextTableOffset}`);const body=await response.json();if(!response.ok)throw new Error(body.error || "Unable to load tables.");setTables(items=>[...items,...body.tables.filter((table:ComparisonTableData)=>!items.some(item=>item.id===table.id))]);setNextTableOffset(body.next_offset ?? null);}catch(cause){setError(cause instanceof Error?cause.message:"Unable to load tables.");}}}>Load more tables</button>}
+              {selectedTables.length >= 30 && <p className="obs-muted">Publish up to 30 tables at a time; you can publish more afterwards.</p>}
             </div>}
             <label className="obs-share-acknowledgement">
               <input
@@ -580,20 +593,16 @@ function SharingPanel({
 
 export function HypothesisPanel({ data }: { data: Snapshot }) {
   const [selectedId, setSelectedId] = useState("");
+  const [selectedExperiment, setSelectedExperiment] = useState("");
+  const [selectedObservation, setSelectedObservation] = useState("");
+  const [expanded, setExpanded] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
   const selected = data.hypotheses.find(
     (hypothesis) => hypothesis.id === selectedId,
   );
-  if (!data.hypotheses.length)
-    return (
-      <section className="obs-card">
-        <Empty title="No hypotheses yet">
-          Connect an agent to register a testable prediction.
-        </Empty>
-        <Link href="/settings" className="obs-text-link">
-          Connect your research agent <ArrowUpRight size={14} />
-        </Link>
-      </section>
-    );
+  const experimentDetail = data.experiments.find(item => item.id === selectedExperiment);
+  const observationDetail = data.observations.find(item => item.id === selectedObservation);
+  const unlinked = data.experiments.filter(experiment => !data.hypotheses.some(hypothesis => hypothesis.id === experiment.hypothesis_id));
   const depth = (hypothesis: Hypothesis, seen = new Set<string>()): number => {
     if (!hypothesis.parent_hypothesis_id || seen.has(hypothesis.id)) return 0;
     seen.add(hypothesis.id);
@@ -602,26 +611,34 @@ export function HypothesisPanel({ data }: { data: Snapshot }) {
     );
     return parent ? 1 + depth(parent, seen) : 0;
   };
+  const matching = data.hypotheses.filter(hypothesis => `${hypothesis.title} ${hypothesis.statement} ${data.experiments.filter(item => item.hypothesis_id === hypothesis.id).map(item => item.title).join(" ")}`.toLowerCase().includes(query.toLowerCase()));
   const rows: Record<number, number> = {};
-  const positions = data.hypotheses.map((hypothesis) => {
+  const positions = matching.map((hypothesis) => {
     const column = depth(hypothesis);
-    const row = rows[column] || 0;
-    rows[column] = row + 1;
-    return { hypothesis, x: column * 280 + 25, y: row * 118 + 25 };
+    const experiments = data.experiments.filter(item => item.hypothesis_id === hypothesis.id);
+    const shown = expanded.includes(hypothesis.id) ? experiments : experiments.slice(0, 2);
+    const row = rows[column] || 25;
+    const height = 112 + shown.length * 76 + (experiments.length > 2 ? 34 : 0);
+    rows[column] = row + height + 25;
+    return { hypothesis, experiments, shown, x: column * 310 + 25, y: row, height };
   });
-  const width = Math.max(...positions.map((position) => position.x)) + 270,
-    height = Math.max(...positions.map((position) => position.y)) + 120;
+  const width = Math.max(0, ...positions.map((position) => position.x)) + 300,
+    height = Math.max(280, ...positions.map((position) => position.y + position.height + 25));
   return (
     <div className="obs-hypothesis-layout">
       <section className="obs-card">
         <div className="obs-card-heading">
           <div>
-            <h2>Hypotheses</h2>
+            <h2>Research map</h2>
+            <p className="obs-muted">Choose a hypothesis, experiment, or observation to explore it.</p>
           </div>
           <span className="obs-subtle-label">
             {data.hypotheses.length} total
           </span>
         </div>
+        <label className="obs-search"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search the research map" aria-label="Search the research map" /></label>
+        {!data.hypotheses.length && <p className="obs-muted">No hypotheses yet. Connect an agent to add a testable idea.</p>}
+        {(data.hypotheses.length >= 300 || data.experiments.length >= 500 || data.observations.length >= 3000) && <p className="obs-muted">This map shows a limited snapshot. Use the campaign tools to retrieve additional records.</p>}
         <div className="obs-graph-scroll">
           <div className="obs-graph" style={{ width, height }}>
             <svg width={width} height={height} aria-hidden="true">
@@ -647,7 +664,7 @@ export function HypothesisPanel({ data }: { data: Snapshot }) {
                 return (
                   <g key={position.hypothesis.id}>
                     <path
-                      d={`M${parent.x + 235},${parent.y + 38} C${parent.x + 260},${parent.y + 38} ${position.x - 25},${position.y + 38} ${position.x},${position.y + 38}`}
+                      d={`M${parent.x + 265},${parent.y + 38} C${parent.x + 285},${parent.y + 38} ${position.x - 25},${position.y + 38} ${position.x},${position.y + 38}`}
                       fill="none"
                       stroke="#65715f"
                       markerEnd="url(#hypothesis-arrow)"
@@ -661,33 +678,41 @@ export function HypothesisPanel({ data }: { data: Snapshot }) {
                 );
               })}
             </svg>
-            {positions.map(({ hypothesis, x, y }) => (
-              <button
+            {positions.map(({ hypothesis, experiments, shown, x, y, height }) => (
+              <div
                 className={`obs-hypothesis-node ${hypothesis.id === selectedId ? "selected" : ""}`}
-                style={{ left: x, top: y }}
+                style={{ left: x, top: y, height }}
                 key={hypothesis.id}
-                onClick={() => setSelectedId(hypothesis.id)}
-                aria-pressed={hypothesis.id === selectedId}
               >
-                <div>
+                <button type="button" className="obs-map-hypothesis" onClick={() => { setSelectedId(hypothesis.id); setSelectedExperiment(""); setSelectedObservation(""); }} aria-pressed={hypothesis.id === selectedId && !selectedExperiment && !selectedObservation}>
                   <Badge status={hypothesis.status} />
-                </div>
-                <strong>{hypothesis.title || hypothesis.statement}</strong>
-                <small>
-                  {
-                    data.experiments.filter(
-                      (experiment) =>
-                        experiment.hypothesis_id === hypothesis.id,
-                    ).length
-                  }{" "}
-                  experiments
-                </small>
-              </button>
+                  <strong>{hypothesis.title || hypothesis.statement}</strong>
+                  <small>{experiments.length} {experiments.length === 1 ? "experiment" : "experiments"}</small>
+                </button>
+                {shown.map(experiment => {
+                  const runIds = new Set(data.runs.filter(run => run.experiment_id === experiment.id).map(run => run.id));
+                  const observations = data.observations.filter(observation => runIds.has(observation.run_id));
+                  const latest = observations.at(-1);
+                  return <div className="obs-map-experiment" key={experiment.id}>
+                    <button type="button" onClick={() => {setSelectedId(hypothesis.id); setSelectedExperiment(experiment.id); setSelectedObservation("");}} aria-pressed={selectedExperiment === experiment.id}><FlaskConical size={14} /> <span>{experiment.title}</span></button>
+                    {latest ? <button type="button" className="obs-map-observation" onClick={() => {setSelectedId(hypothesis.id); setSelectedExperiment(""); setSelectedObservation(latest.id);}} aria-pressed={selectedObservation === latest.id}>{data.metrics.find(metric => metric.id === latest.metric_id)?.name || "Observation"}: {latest.value == null ? "See note" : `${numeric(latest.value)} ${latest.unit || ""}`} · {observations.length} total</button> : <small>No observations yet</small>}
+                  </div>;
+                })}
+                {experiments.length > 2 && <button type="button" className="obs-map-more" onClick={() => setExpanded(items => items.includes(hypothesis.id) ? items.filter(id => id !== hypothesis.id) : [...items,hypothesis.id])}>{expanded.includes(hypothesis.id) ? "Show less" : `Show ${experiments.length - 2} more`}</button>}
+              </div>
             ))}
           </div>
         </div>
+        {unlinked.length > 0 && <div className="obs-map-unlinked"><h3>Other experiments</h3><p className="obs-muted">These experiments have no hypothesis in the visible map.</p>{unlinked.filter(item => item.title.toLowerCase().includes(query.toLowerCase())).map(experiment => <button key={experiment.id} className="obs-link-button" onClick={() => {setSelectedId(""); setSelectedObservation(""); setSelectedExperiment(experiment.id);}}>{experiment.title} <ChevronRight size={15}/></button>)}</div>}
       </section>
-      {selected ? (
+      {observationDetail ? (
+        <section className="obs-card obs-detail"><div className="obs-card-heading"><h2>Observation</h2><button className="obs-icon-button" onClick={() => setSelectedObservation("")} aria-label="Close observation detail"><X size={18} /></button></div>
+          <DataText label="Measurement">{observationDetail.value == null ? "Qualitative observation" : `${numeric(observationDetail.value)} ${observationDetail.unit || ""}`}</DataText>
+          <DataText label="Notes">{observationDetail.qualitative}</DataText><DataText label="Conditions">{observationDetail.conditions_key}</DataText><DataText label="Evidence">{observationDetail.evidence}</DataText><DataText label="Uncertainty">{observationDetail.uncertainty}</DataText><p>Sample size: {observationDetail.sample_size ?? "not reported"} · {date(observationDetail.created_at)}</p>
+        </section>
+      ) : experimentDetail ? (
+        <ExperimentDetail experiment={experimentDetail} data={data} onClose={() => setSelectedExperiment("")} />
+      ) : selected ? (
         <HypothesisDetail
           hypothesis={selected}
           data={data}

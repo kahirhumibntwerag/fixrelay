@@ -1,4 +1,5 @@
 import { registryDb } from './registry-db';
+import { databaseUrl } from './database-config';
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
@@ -32,7 +33,7 @@ export type Report = z.infer<typeof reportSchema> & {
   created_at: string;
 };
 export function db() {
-  if (!process.env.DATABASE_URL) throw new Error("Database is not configured");
+  if (!databaseUrl()) throw new Error("Database is not configured");
   return registryDb();
 }
 

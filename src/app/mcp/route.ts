@@ -94,7 +94,9 @@ async function serve(request: Request) {
     const params = body?.params as { name?: unknown } | undefined;
     const isChartUpload =
       body?.method === "tools/call" && params?.name === "upload_chart";
-    if (!isChartUpload && size > 100000)
+    const isDetailedResearch = body?.method === "tools/call" &&
+      (params?.name === "update_campaign_brief" || params?.name === "append_series_points");
+    if (!isChartUpload && size > (isDetailedResearch ? 512000 : 100000))
       return Response.json({ error: "Request too large" }, { status: 413 });
     checked = new Request(request.url, {
       method: "POST",

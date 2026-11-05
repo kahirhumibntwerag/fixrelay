@@ -165,6 +165,11 @@ export type Artifact = {
 };
 export type Snapshot = {
   campaign: Campaign;
+  brief: {
+    author: string;
+    created_at: string;
+    stale: boolean;
+  } | null;
   metrics: Metric[];
   hypotheses: Hypothesis[];
   experiments: Experiment[];
